@@ -75,11 +75,11 @@ def T_matrix(C):
         T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T))
     
     return T
-C = -0.1 * np.ones((10, 10))
-np.fill_diagonal(C, 1)
-T = T_matrix(C)
-print T
-print np.dot(T.T, T)
+# C = -0.1 * np.ones((10, 10))
+# np.fill_diagonal(C, 1)
+# T = T_matrix(C)
+# print T
+# print np.dot(T.T, T)
 
 """
 random Fourier features stacked with Hadamard-Rademacher products
