@@ -57,6 +57,31 @@ def ort_gaussian_RFF(X, n_rff, seed, scale):
     return PhiX
 
 """
+Generate Fourier features with a certain angle between all vectors (if dimension allows it) 
+"""
+def T_matrix(C):
+    # Let C be of size (k,k), this function computes one upper triangular matrix T of size (k,k) such that T.T * T = C
+    # if X is a (d,k) matrix (d>k) and X.T * X = eye(k) 
+    # (e.g. X is a matrix of k orthogonal d-dimensional columns) then if U = XT it holds that U.T * U = C, e.g. the scalar product between
+    # the i-th and j-th columns of U is exactly C_ij.
+    # Complexity: O(k^3), NOT vectorized. Considering the results when C = (1, c, c, ..., c \\ c, 1, c, c, ..., c \\ ... \\ c, c, ..., c, 1) it could be optimized for this particular case. 
+    k = C.shape[0]
+    T = np.zeros((k, k))
+    T[0, 0] = np.sqrt(C[1, 1])
+    for j in xrange(1, k):
+        T[0, j] = C[0, j] / T[0, 0]
+        for i in xrange(1, j):
+            T[i, j] = (C[i, j] - np.dot(T[:(i), i].T, T[:(i), j])) / T[i, i]
+        T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T))
+    
+    return T
+C = -0.1 * np.ones((10, 10))
+np.fill_diagonal(C, 1)
+T = T_matrix(C)
+print T
+print np.dot(T.T, T)
+
+"""
 random Fourier features stacked with Hadamard-Rademacher products
 """
 def hadamard_product(R): 
