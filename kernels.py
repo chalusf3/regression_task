@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import scipy.stats as sp_stats
 
@@ -51,6 +52,8 @@ def unif_ort_gaussian(shape):
     return G
 
 def ort_gaussian_RFF(X, n_rff, seed, scale):
+    # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
+    # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     omega = unif_ort_gaussian((X.shape[1], n_rff))
     PhiX = np.cos(np.dot(X, omega) / scale) / np.sqrt(n_rff)
@@ -62,9 +65,9 @@ Generate Fourier features with a certain angle between all vectors (if dimension
 def T_matrix(C):
     # Let C be of size (k,k), this function computes one upper triangular matrix T of size (k,k) such that T.T * T = C
     # if X is a (d,k) matrix (d>k) and X.T * X = eye(k) 
-    # (e.g. X is a matrix of k orthogonal d-dimensional columns) then if U = XT it holds that U.T * U = C, e.g. the scalar product between
-    # the i-th and j-th columns of U is exactly C_ij.
-    # Complexity: O(k^3), NOT vectorized. Considering the results when C = (1, c, c, ..., c \\ c, 1, c, c, ..., c \\ ... \\ c, c, ..., c, 1) it could be optimized for this particular case. 
+    # (e.g. X is a matrix of k orthonormal d-dimensional columns) then if U = XT it holds that U.T * U = C, e.g. the scalar product between
+    # the i-th and j-th columns of U is exactly C_ij
+    # Complexity: O(k^3), NOT vectorized. Considering the results when C = (1, c, c, ..., c \\ c, 1, c, c, ..., c \\ ... \\ c, c, ..., c, 1) it could be optimized for this particular case. 
     k = C.shape[0]
     T = np.zeros((k, k))
     T[0, 0] = np.sqrt(C[1, 1])
@@ -73,13 +76,29 @@ def T_matrix(C):
         for i in xrange(1, j):
             T[i, j] = (C[i, j] - np.dot(T[:(i), i].T, T[:(i), j])) / T[i, i]
         T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T))
+        # if T[j, j] == np.nan:
+        #     break
     
     return T
-# C = -0.1 * np.ones((10, 10))
+# C = -0.4 * np.ones((10, 10))
 # np.fill_diagonal(C, 1)
 # T = T_matrix(C)
 # print T
 # print np.dot(T.T, T)
+
+def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
+    # angle between 0 and pi
+    np.random.seed(seed)
+    
+    C = np.arccos(angle) * np.ones((n_rff, n_rff))
+    np.fill_diagonal(C, 1)
+    angle_matrix = T_matrix(C)
+
+    omega = unif_ort_gaussian((X.shape[1], n_rff))
+    omega = np.dot(omega, angle_matrix)
+    
+    PhiX = np.cos(np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    return PhiX
 
 """
 random Fourier features stacked with Hadamard-Rademacher products
