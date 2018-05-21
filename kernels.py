@@ -6,17 +6,21 @@ import scipy.stats as sp_stats
 deterministic Gaussian kernel
 """
 def gaussian_kernel(X, loc, scale):
-    # returns the gram matrix K_ij = exp(-||X_j - loc_i||^2/(2*scale^2))
+    # returns the gram matrix K_ij = exp(-||X_i - loc_j||^2/(2*scale^2))
     # X is given with rows as sample vectors (size n_samples x dimension_samples), same for loc
     K = np.tile(np.square(np.linalg.norm(X, axis = 1)), [loc.shape[0], 1]).T + np.tile(np.square(np.linalg.norm(loc, axis = 1)), [X.shape[0], 1]) - 2 * np.dot(X, loc.T)
     K = np.exp(- K / 2 / scale**2)
     return K
+# X = np.random.normal(size = (5,6))
+# loc = np.random.normal(size = (3, 6))
+# print gaussian_kernel(X, loc, 0.4)
+# print gaussian_kernel(X, loc, 0.4)[3,1], np.exp(- np.linalg.norm(loc[1] - X[3]) ** 2 / 2 / 0.4 ** 2)
 
 def gaussian_kernel_gram(X, scale):
     # returns the gram matrix K_ij = exp(-||X_i-X_j||^2/(2*scale^2))
     # X is given with rows as sample vectors (size n_samples x dimension_samples)
     return gaussian_kernel(X, X, scale)
-    
+
 """
 random Fourier features iid
 """
@@ -24,9 +28,11 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     # returns the matrix (cos(<omega_{1}, X>), ..., cos(<omega_{n_rff}, X>)) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
-    omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff))
-    # omega = np.random.normal(loc = 0.0, scale = 1.0, size = (n_rff, X.shape[1])).T # fourier frequencies are columns! they must be identical when using the same seeds and X.shape[1] but different n_rff
-    PhiX = np.cos(np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    if n_rff % 2 != 0:
+        raise Warning('One can only generate an even number of random fourier features (cos + sin)')
+    omega = np.random.normal(loc = 0.0, scale = 1.0 / scale, size = (X.shape[1], n_rff / 2)) # random frequencies
+    # PhiX = np.cos(np.dot(X, omega)) / np.sqrt(n_rff)
+    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -55,8 +61,10 @@ def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
-    omega = unif_ort_gaussian((X.shape[1], n_rff))
-    PhiX = np.cos(np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    if n_rff % 2 != 0:
+        raise Warning('One can only generate an even number of random fourier features (cos + sin)')
+    omega = unif_ort_gaussian((X.shape[1], n_rff / 2)) / scale
+    PhiX = np.stack([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))]) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -80,7 +88,7 @@ def T_matrix(C):
         #     break
     
     return T
-# C = -0.4 * np.ones((10, 10))
+# C = 0.4 * np.ones((10, 10))
 # np.fill_diagonal(C, 1)
 # T = T_matrix(C)
 # print T
@@ -95,9 +103,9 @@ def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
     angle_matrix = T_matrix(C)
 
     omega = unif_ort_gaussian((X.shape[1], n_rff))
-    omega = np.dot(omega, angle_matrix)
+    omega = np.dot(omega, angle_matrix) / scale
     
-    PhiX = np.cos(np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    PhiX = np.stack([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))]) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -156,6 +164,6 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
 
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
-    K = hadamard_rademacher_product_scale_chi(X, n_rff, k)
-    PhiX = np.cos(K / scale) / np.sqrt(n_rff)
+    K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
+    PhiX = np.stack([np.cos(K), np.sin(K)]) / np.sqrt(n_rff)
     return PhiX
