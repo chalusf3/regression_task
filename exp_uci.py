@@ -41,6 +41,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     X, y = load_wine_dataset()
     X = whiten_data(X)[0]
+    # y = whiten_data(y)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.7) 
     X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.667) 
     # X_train = 70 % of all data
@@ -51,32 +52,33 @@ if __name__ == '__main__':
     scale = 8.0
     n_rff = 64
     seed = 0
+    # Fit a GP with kernel 
+    print 'Start'
+    y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    print 'Done'
+    # print y_cv - y_cv_gp_kernel
+    print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
+
+    # Fit a GP with random features 
+    print 'Start'
+    y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    print 'Done'
+    print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+
+    print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
+    
+    
     # Fit with kernel trick
     print 'Start'
-    K_train = kernels.gaussian_kernel_gram(X_train, scale)
-    K_pred = kernels.gaussian_kernel(X_cv, X_train, scale)
-    y_cv_fit_kernel = krr.fit_kernel(K_pred, K_train, y_train, noise_var)
+    y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
     print 'Done'
 
     # Fit with feature regression
     print 'Start'
-    PhiX_train = kernels.iid_gaussian_RFF(X_train, n_rff, seed, scale)
-    PhiX_cv = kernels.iid_gaussian_RFF(X_cv, n_rff, seed, scale)
-    
-    beta_feature = krr.lin_reg(PhiX_train, y_train, noise_var)
-    y_cv_fit_feature = np.dot(PhiX_cv, beta_feature)    
+    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
     print 'Done'
-    
-    # Fit by computing the kernel from the RFF and doing kernelized regression -> slow
-    # print 'Start'
-    # PhiX_train = kernels.iid_gaussian_RFF(X_train, n_rff, seed, scale)
-    # PhiX_cv = kernels.iid_gaussian_RFF(X_cv, n_rff, seed, scale)
-    # K_train = np.dot(PhiX_train, PhiX_train.T)
-    # K_pred = np.dot(PhiX_cv, PhiX_train.T)
-
-    # y_cv_fit_feature_kernelized = krr.fit_kernel(K_pred, K_train, y_train, noise_var)
-    # print 'Done'
 
     print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
     print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
-    # print np.linalg.norm(y_cv - y_cv_fit_feature_kernelized) / y_cv.shape[0]
+    print np.linalg.norm(y_cv_fit_kernel - y_cv_fit_feature) / y_cv.shape[0]
+    
