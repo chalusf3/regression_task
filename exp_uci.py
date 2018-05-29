@@ -74,7 +74,9 @@ if __name__ == '__main__':
 
     # Fit with feature regression
     print 'Start'
-    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.angled_gaussian_RFF(a, n_rff, seed, scale, np.cos(-.1)))
+    angles = np.linspace(1.6, 1.5, n_rff / 4 + 1)
+    angles[0] = 0.0
+    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.angled_gaussian_RFF(a, n_rff, seed, scale, angles))
     print 'Done'
 
     print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]

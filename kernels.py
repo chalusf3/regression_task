@@ -106,19 +106,30 @@ def T_matrix(C):
 # print np.round(mat_norm, decimals = 2)
 # print np.round(np.divide(np.dot(stacked_angled.T, stacked_angled), mat_norm), decimals = 2)
 
-def angled_gaussian_RFF(X, n_rff, seed, scale, angle, n_constraints = -1):
-    # angle between 0 and pi
-    # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+1}, ..., angle between X_i and X_{n_constraints} are
-    # all equal to the variable angle
+# n_rff = 14
+# angles = np.array([0, 0.2, 0.4, 0.5])
+# C = np.eye(n_rff / 2)
+# for j in range(1, n_rff / 4 + 1):
+#     C += angles[j] * (np.diag(np.ones(n_rff / 2 - j), j) + np.diag(np.ones(n_rff / 2 - j), -j) + np.diag(np.ones(j), n_rff / 2 - j) + np.diag(np.ones(j), j - n_rff / 2))
+# if n_rff % 4 == 0:
+#     C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
+# print C
+
+def angled_gaussian_RFF(X, n_rff, seed, scale, angles):
+    # angles is of length ceil(n_rff / 4)+1 with values between 0 and pi and angles[0] = 0
+    # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+j} is equal to angles[j]
     np.random.seed(seed)
     
-    if n_constraints == -1: # n_constraints = -1 is a default value
-        n_constraints = X.shape[1] - 1
-
-    C = np.arccos(angle) * np.ones((n_rff / 2, n_rff / 2))
-    np.fill_diagonal(C, 1)
+    # C = np.arccos(angles) * np.ones((n_rff / 2, n_rff / 2))
+    # np.fill_diagonal(C, 1)
+    angles = np.cos(angles) # scalar products
+    C = np.eye(n_rff / 2) * angles[0]
+    for j in range(1, n_rff / 4 + 1):
+        C += angles[j] * (np.diag(np.ones(n_rff / 2 - j), j) + np.diag(np.ones(n_rff / 2 - j), -j) + np.diag(np.ones(j), n_rff / 2 - j) + np.diag(np.ones(j), j - n_rff / 2))
+    if n_rff % 4 == 0:
+        C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
     angle_matrix = T_matrix(C)
-    
+
     omega = stacked_unif_ort_gaussian((X.shape[1], n_rff / 2)) # TODO: we don't want gaussian rows!!?
     omega = np.dot(omega, angle_matrix) / scale
     omega = np.multiply(omega, np.sqrt(np.random.chisquare(X.shape[1], size = n_rff / 2)))
