@@ -48,11 +48,16 @@ def unif_ort_QR(dim):
     G_ort = np.dot(G_ort, np.diag(np.sign(np.diag(R))))
     return G_ort
 
-def unif_ort_gaussian(shape): 
-    # generates a matrix with shape[1] orthogonal columns of lengths shape[0], each marginally gaussian
+def stacked_unif_ort_gaussian(shape):
+    # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
     G = [unif_ort_QR(shape[0]) for _ in range(int(np.ceil(float(shape[1]) / shape[0])))]
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
     G = G[:, :shape[1]]
+    return G
+
+def unif_ort_gaussian(shape): 
+    # generates a matrix with shape[1] orthogonal columns of lengths shape[0], each marginally gaussian
+    G = stacked_unif_ort_gaussian(shape)
     norms = np.sqrt(np.random.chisquare(df = shape[0], size = (1, shape[1])))
     G = np.multiply(norms, G)
     return G
@@ -71,7 +76,7 @@ def ort_gaussian_RFF(X, n_rff, seed, scale):
 Generate Fourier features with a certain angle between all vectors (if dimension allows it) 
 """
 def T_matrix(C):
-    # Let C be of size (k,k), this function computes one upper triangular matrix T of size (k,k) such that T.T * T = C
+    # Let C be of size (k,k). This function computes one upper triangular matrix T of size (k,k) such that T.T * T = C
     # if X is a (d,k) matrix (d>k) and X.T * X = eye(k) 
     # (e.g. X is a matrix of k orthonormal d-dimensional columns) then if U = XT it holds that U.T * U = C, e.g. the scalar product between
     # the i-th and j-th columns of U is exactly C_ij
@@ -88,25 +93,54 @@ def T_matrix(C):
         #     break
     
     return T
-# C = 0.4 * np.ones((10, 10))
+# C = 0.4 * np.ones((10, 10)) # 10 features
 # np.fill_diagonal(C, 1)
 # T = T_matrix(C)
-# print T
 # print np.dot(T.T, T)
+# A = stacked_unif_ort_gaussian((7, 10)) # 10 7-dimensional orthogonal features
+# print np.round(np.dot(A.T, A), decimals = 2)
+# stacked_angled = np.dot(A, T)
+# stacked_angled = stacked_angled * np.sqrt(np.random.chisquare(7, size = (10)))
+# mat_norm = np.reshape(np.linalg.norm(stacked_angled, axis = 0), (10, 1))
+# mat_norm = np.tile(mat_norm, [1, 10]) * np.tile(mat_norm.T, [10, 1])
+# print np.round(mat_norm, decimals = 2)
+# print np.round(np.divide(np.dot(stacked_angled.T, stacked_angled), mat_norm), decimals = 2)
 
-def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
+def angled_gaussian_RFF(X, n_rff, seed, scale, angle, n_constraints = -1):
     # angle between 0 and pi
+    # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+1}, ..., angle between X_i and X_{n_constraints} are
+    # all equal to the variable angle
     np.random.seed(seed)
     
-    C = np.arccos(angle) * np.ones((n_rff, n_rff))
+    if n_constraints == -1: # n_constraints = -1 is a default value
+        n_constraints = X.shape[1] - 1
+
+    C = np.arccos(angle) * np.ones((n_rff / 2, n_rff / 2))
     np.fill_diagonal(C, 1)
     angle_matrix = T_matrix(C)
-
-    omega = unif_ort_gaussian((X.shape[1], n_rff))
-    omega = np.dot(omega, angle_matrix) / scale
     
-    PhiX = np.stack([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))]) / np.sqrt(n_rff)
+    omega = stacked_unif_ort_gaussian((X.shape[1], n_rff / 2)) # TODO: we don't want gaussian rows!!?
+    omega = np.dot(omega, angle_matrix) / scale
+    omega = np.multiply(omega, np.sqrt(np.random.chisquare(X.shape[1], size = n_rff / 2)))
+
+    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
     return PhiX
+
+def sample_theta(m):
+    # samples one theta with density = sin(theta)^(m-2) dtheta (e.g. the density of the angle between two random uniform vectors)
+    # use acceptance-rejection sampling with a uniform as dominating density
+
+    u = np.random.uniform()
+    theta = np.pi * np.random.uniform()
+    
+    while u > np.sin(theta)**(m-2):
+        u = np.random.uniform()
+        theta = np.pi * np.random.uniform()
+    
+    return theta
+# import matplotlib.pyplot as plt
+# plt.hist([sample_theta(3) for _ in range(1000)], 30)
+# plt.show()
 
 """
 random Fourier features stacked with Hadamard-Rademacher products

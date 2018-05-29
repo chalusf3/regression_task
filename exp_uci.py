@@ -52,22 +52,21 @@ if __name__ == '__main__':
     scale = 8.0
     n_rff = 64
     seed = 0
-    # Fit a GP with kernel 
-    print 'Start'
-    y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    print 'Done'
-    # print y_cv - y_cv_gp_kernel
-    print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
+    # # Fit a GP with kernel 
+    # print 'Start'
+    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    # print 'Done'
+    # # print y_cv - y_cv_gp_kernel
+    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
 
-    # Fit a GP with random features 
-    print 'Start'
-    y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
-    print 'Done'
-    print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+    # # Fit a GP with random features 
+    # print 'Start'
+    # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    # print 'Done'
+    # print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+    # print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
 
-    print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
-    
-    
+
     # Fit with kernel trick
     print 'Start'
     y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
@@ -75,7 +74,7 @@ if __name__ == '__main__':
 
     # Fit with feature regression
     print 'Start'
-    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, lambda a: kernels.angled_gaussian_RFF(a, n_rff, seed, scale, np.cos(-.1)))
     print 'Done'
 
     print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
