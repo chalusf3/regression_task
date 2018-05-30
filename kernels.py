@@ -130,6 +130,7 @@ def angled_block(dim, scal_prod):
     else:
         max_d = angle_matrix.shape[0]
     max_d = min(max_d, dim)
+    # print 'can only enforce %d relations for scalar product %f' % (max_d, scal_prod)
     angle_matrix = angle_matrix[:, :max_d]
 
     ret = [np.dot(unif_ort_QR(dim), angle_matrix) for _ in range(int(np.ceil(float(dim) / max_d)))]

@@ -27,7 +27,7 @@ def posterior_from_feature_gen(X_train, y_train, X_pred, noise_var, feature_gen)
         K_new = np.dot(PhiX_pred, PhiX_pred.T)
         return posterior(K, K_pred, K_new, y_train, noise_var)
 
-    # # poor performance, is there a better way to avoid computing inverses by exploiting the structure K = np.dot(Phi, Phi.T)?
+    # # poor performance, is there a better way to avoid computing inverses by exploiting the structure K = np.dot(Phi, Phi.T)? Yup, see above
     # K =  np.dot(PhiX_train, PhiX_train.T)
     # K_pred = np.dot(PhiX_pred, PhiX_train.T)
     # K_new =  np.dot(PhiX_pred, PhiX_pred.T)
