@@ -48,7 +48,7 @@ def unif_ort_QR(dim):
     G_ort = np.dot(G_ort, np.diag(np.sign(np.diag(R))))
     return G_ort
 
-def stacked_unif_ort_gaussian(shape):
+def stacked_unif_ort(shape):
     # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
     G = [unif_ort_QR(shape[0]) for _ in range(int(np.ceil(float(shape[1]) / shape[0])))]
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
@@ -57,7 +57,7 @@ def stacked_unif_ort_gaussian(shape):
 
 def unif_ort_gaussian(shape): 
     # generates a matrix with shape[1] orthogonal columns of lengths shape[0], each marginally gaussian
-    G = stacked_unif_ort_gaussian(shape)
+    G = stacked_unif_ort(shape)
     norms = np.sqrt(np.random.chisquare(df = shape[0], size = (1, shape[1])))
     G = np.multiply(norms, G)
     return G
@@ -115,24 +115,37 @@ def T_matrix(C):
 #     C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
 # print C
 
-def angled_gaussian_RFF(X, n_rff, seed, scale, angles):
-    # angles is of length ceil(n_rff / 4)+1 with values between 0 and pi and angles[0] = 0
-    # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+j} is equal to angles[j]
+# C = (-1.0/3) * np.ones((4,4))
+# np.fill_diagonal(C, 1)
+# print T_matrix(C)
+
+def angled_block(dim, scal_prod):
+    # returns a dim x dim matrix of norm 1 columns having scalar products = scal_prod
+    C = np.ones((dim, dim)) * scal_prod
+    np.fill_diagonal(C, 1)
+    angle_matrix = T_matrix(C)
+    
+    if np.isnan(angle_matrix[-1, -1]):
+        max_d = np.min(np.argwhere(np.isnan(angle_matrix)).flatten()) # we can only draw that many vectors satisfying those angles
+    else:
+        max_d = angle_matrix.shape[0]
+    max_d = min(max_d, dim)
+    angle_matrix = angle_matrix[:, :max_d]
+
+    ret = [np.dot(unif_ort_QR(dim), angle_matrix) for _ in range(int(np.ceil(float(dim) / max_d)))]
+    ret = np.concatenate(ret, axis = 1)
+    ret = ret[:, :dim]
+    return ret
+
+def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
+    # angle is between 0 and pi 
+    # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+j} is equal to angle if possible. else stack such vectors
     np.random.seed(seed)
     
-    # C = np.arccos(angles) * np.ones((n_rff / 2, n_rff / 2))
-    # np.fill_diagonal(C, 1)
-    angles = np.cos(angles) # scalar products
-    C = np.eye(n_rff / 2) * angles[0]
-    for j in range(1, n_rff / 4 + 1):
-        C += angles[j] * (np.diag(np.ones(n_rff / 2 - j), j) + np.diag(np.ones(n_rff / 2 - j), -j) + np.diag(np.ones(j), n_rff / 2 - j) + np.diag(np.ones(j), j - n_rff / 2))
-    if n_rff % 4 == 0:
-        C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
-    angle_matrix = T_matrix(C)
-
-    omega = stacked_unif_ort_gaussian((X.shape[1], n_rff / 2)) # TODO: we don't want gaussian rows!!?
-    omega = np.dot(omega, angle_matrix) / scale
-    omega = np.multiply(omega, np.sqrt(np.random.chisquare(X.shape[1], size = n_rff / 2)))
+    omega = [angled_block(X.shape[1], np.cos(angle)) for _ in range(int(np.ceil(float(n_rff / 2) / X.shape[1])))]
+    omega = np.concatenate(omega, axis = 1)
+    omega = omega[:, :(n_rff / 2)]
+    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff / 2))), omega / scale)
 
     PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
     return PhiX
