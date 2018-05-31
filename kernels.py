@@ -21,17 +21,22 @@ def gaussian_kernel_gram(X, scale):
     # X is given with rows as sample vectors (size n_samples x dimension_samples)
     return gaussian_kernel(X, X, scale)
 
+def make_antithetic(prods):
+    n_rff = prods.shape[1]
+    if n_rff % 2 != 0:
+        raise Warning('One can only generate a number of antithetic random fourier features congruent to 0 mod 4')
+    return np.concatenate([prods, prods[:, :n_rff/2], -prods[:, n_rff/2:]], axis = 1)
+
 """
 random Fourier features iid
 """
 def iid_gaussian_RFF(X, n_rff, seed, scale):
-    # returns the matrix (cos(<omega_{1}, X>), ..., cos(<omega_{n_rff}, X>)) / sqrt(n_rff)
+    # returns the matrix (cos(<omega_{1}, X>), ..., cos(<omega_{n_rff / 2}, X>), sin(<omega_{1}, X>, ..., sin(<omega_{n_rff / 2}, X>))) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
-    np.random.seed(seed)
     if n_rff % 2 != 0:
         raise Warning('One can only generate an even number of random fourier features (cos + sin)')
+    np.random.seed(seed)
     omega = np.random.normal(loc = 0.0, scale = 1.0 / scale, size = (X.shape[1], n_rff / 2)) # random frequencies
-    # PhiX = np.cos(np.dot(X, omega)) / np.sqrt(n_rff)
     PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
     return PhiX
 
@@ -69,7 +74,7 @@ def ort_gaussian_RFF(X, n_rff, seed, scale):
     if n_rff % 2 != 0:
         raise Warning('One can only generate an even number of random fourier features (cos + sin)')
     omega = unif_ort_gaussian((X.shape[1], n_rff / 2)) / scale
-    PhiX = np.stack([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))]) / np.sqrt(n_rff)
+    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -224,5 +229,5 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
     K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
-    PhiX = np.stack([np.cos(K), np.sin(K)]) / np.sqrt(n_rff)
+    PhiX = np.concatenate([np.cos(K), np.sin(K)], axis = 1) / np.sqrt(n_rff)
     return PhiX
