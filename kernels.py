@@ -31,13 +31,11 @@ def make_antithetic(prods):
 random Fourier features iid
 """
 def iid_gaussian_RFF(X, n_rff, seed, scale):
-    # returns the matrix (cos(<omega_{1}, X>), ..., cos(<omega_{n_rff / 2}, X>), sin(<omega_{1}, X>, ..., sin(<omega_{n_rff / 2}, X>))) / sqrt(n_rff)
+    # returns the matrix (exp(j<omega_{1}, X>), ..., exp(j<omega_{n_rff}, X>) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
-    if n_rff % 2 != 0:
-        raise Warning('One can only generate an even number of random fourier features (cos + sin)')
     np.random.seed(seed)
-    omega = np.random.normal(loc = 0.0, scale = 1.0 / scale, size = (X.shape[1], n_rff / 2)) # random frequencies
-    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
+    omega = np.random.normal(loc = 0.0, scale = 1.0 / scale, size = (X.shape[1], n_rff)) # random frequencies
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -71,10 +69,8 @@ def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
-    if n_rff % 2 != 0:
-        raise Warning('One can only generate an even number of random fourier features (cos + sin)')
-    omega = unif_ort_gaussian((X.shape[1], n_rff / 2)) / scale
-    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
+    omega = unif_ort_gaussian((X.shape[1], n_rff)) / scale
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -148,12 +144,12 @@ def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
     # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+j} is equal to angle if possible. else stack such vectors
     np.random.seed(seed)
     
-    omega = [angled_block(X.shape[1], np.cos(angle)) for _ in range(int(np.ceil(float(n_rff / 2) / X.shape[1])))]
+    omega = [angled_block(X.shape[1], np.cos(angle)) for _ in range(int(np.ceil(float(n_rff) / X.shape[1])))]
     omega = np.concatenate(omega, axis = 1)
-    omega = omega[:, :(n_rff / 2)]
-    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff / 2))), omega / scale)
+    omega = omega[:, :n_rff]
+    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
 
-    PhiX = np.concatenate([np.cos(np.dot(X, omega)), np.sin(np.dot(X, omega))], axis = 1) / np.sqrt(n_rff)
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
 
 def sample_theta(m):
@@ -229,5 +225,5 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
     K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
-    PhiX = np.concatenate([np.cos(K), np.sin(K)], axis = 1) / np.sqrt(n_rff)
+    PhiX = np.exp(1j * K) / np.sqrt(n_rff)
     return PhiX

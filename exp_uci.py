@@ -125,13 +125,13 @@ def plot_regression_errors(data_name, algo_names):
         x = data.keys()
         x.sort()
         y = [data[k] for k in x]
-        plt.semilogx(x, y, '.-', label = algo_name)
+        plt.loglog(x, y, '.-', label = algo_name)
     plt.legend()
     plt.show()
 
 if __name__ == '__main__':
     np.random.seed(0)
-    data_name = ['wine', 'airq'][1]
+    data_name = ['wine', 'airq'][0]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -149,33 +149,33 @@ if __name__ == '__main__':
     n_rff = 64
     seed = 0
 
-    regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
-    plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3'])
+    # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
+    # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3'])
 
     # Fit a GP with random features 
-    # print 'Start'
-    # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                                     lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
-    # print 'Done'
-    # print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+    print 'Start'
+    y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+                                                        lambda a: kernels.ort_gaussian_RFF(a, n_rff, seed, scale))
+    print 'Done'
+    print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
     
     # Fit a GP with kernel 
-    # print 'Start'
-    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    # print 'Done'
-    # # print y_cv - y_cv_gp_kernel
-    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
-    # print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
+    print 'Start'
+    y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    print 'Done'
+    print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
+    print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
 
     # Fit with kernel trick
-    # print 'Start'
-    # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    # print 'Done'
-    # print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
+    print 'Start'
+    y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    print 'Done'
+    print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
 
-    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.HD_gaussian_RFF(a, n_rff, seed, scale, 3))
-    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
+    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+                                                lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    y_cv_fit_feature = np.real(y_cv_fit_feature)
+    print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
 
     # Fit with feature regression
     # print 'Start'
