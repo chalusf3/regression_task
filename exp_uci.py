@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv, timeit, pickle
 import krr, gpr, kernels
+from datetime import timedelta, datetime
 
 def load_wine_dataset():
     X = np.zeros(shape = (1599, 11))
@@ -15,6 +16,46 @@ def load_wine_dataset():
             X[c] = row[0:11]
             y[c] = row[11]
             c+=1
+    return X, y
+    # noise_var = 1.0, scale = 8.0
+    
+def load_air_quality_dataset():
+    def format_row(input):
+        input = filter(None, input)
+        if len(input):
+            date = datetime.strptime(','.join(input[0:2]), '%d/%m/%Y,%H.%M.%S')
+            expl = [float(x.replace(',', '.')) for x in input[3:4]+input[5:]]
+            response = float(input[2].replace(',', '.'))
+            return date, expl, response
+        else:
+            return None, None, None
+    
+    X = [None]
+    y = [None]
+
+    with open('datasets/AirQualityUCI.csv', 'rb') as f:
+        next(f)
+
+        reader = csv.reader(f, delimiter = ';', quotechar = '"')
+        start_date, expl, y[0] = format_row(reader.next())
+        X[0] = [0]+expl
+        # start_date = datetime.strptime(','.join(row[0:2]), '%d/%m/%Y,%H.%M.%S')
+
+        # X.append([0] + [float(x.replace(',', '.')) for x in row[3:-1]])
+        # y.append(float(row[2].replace(',', '.')))
+        for row in reader:
+            row_date, expl, response = format_row(row)
+            # row = filter(None, row)
+            # row = row[0:4]+row[5:]
+
+            if not row_date or not len(row) or -200 in row or response == -200:
+                continue
+        
+            X.append([(row_date - start_date).total_seconds()] + expl)
+            y.append(response)
+        
+        X = np.matrix(X)
+        y = np.matrix(y).T
     return X, y
 
 def shuffle(X, y):
@@ -49,8 +90,7 @@ def krr_tune(X_train, y_train, X_cv, y_cv):
             errors[i,j] = np.linalg.norm(y_cv_fit_kernel - y_cv) / y_cv.shape[0]
     print np.round(errors, decimals = 4)
 
-def regression_error_n_rff(X_train, y_train, X_test, y_test, noise_var, scale):
-    
+def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale):
     algo_names = ['iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3']
     feature_gen_handles = [lambda a: kernels.iid_gaussian_RFF(a, n_rff, 0, scale), \
                            lambda a: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, 0, scale)), \
@@ -67,20 +107,20 @@ def regression_error_n_rff(X_train, y_train, X_test, y_test, noise_var, scale):
             y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, feature_gen_handle)
             errors[n_rff] = np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]
             print n_rff, errors[n_rff]
-        with open('%s_krr.pk' % algo_name, 'wb') as f:
+        with open('%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
     
-    # errors = {}
-    # for n_rff in n_rffs[:1] + n_rffs[-1:]:
-    #     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    #     errors[n_rff] = np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]
-    #     print n_rff, errors[n_rff]
-    # with open('exact_krr.pk', 'wb') as f:
-    #     pickle.dump(errors, f)
+    errors = {}
+    for n_rff in n_rffs[:1] + n_rffs[-1:]:
+        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+        errors[n_rff] = np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]
+        print n_rff, errors[n_rff]
+    with open('%s_exact_krr.pk' % data_name, 'wb') as f:
+        pickle.dump(errors, f)
 
-def plot_regression_errors(algo_names):
+def plot_regression_errors(data_name, algo_names):
     for algo_name in algo_names:
-        with open('%s_krr.pk' % algo_name, 'rb') as f:
+        with open('%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
             data = pickle.load(f)
         x = data.keys()
         x.sort()
@@ -91,36 +131,40 @@ def plot_regression_errors(algo_names):
 
 if __name__ == '__main__':
     np.random.seed(0)
-    X, y = load_wine_dataset()
+    data_name = ['wine', 'airq'][1]
+    if data_name == 'wine':
+        X, y = load_wine_dataset()
+    elif data_name == 'airq':
+        X, y = load_air_quality_dataset()
+    
     X = whiten_data(X)[0]
-    # y = whiten_data(y)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.7) 
     X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.667) 
     # X_train = 70 % of all data
-    # X_test = 20 % of all data
-    # X_cv = 10 % of all data
+    # X_test =  20 % of all data
+    # X_cv =    10 % of all data
 
     noise_var = 1.0
     scale = 8.0
     n_rff = 64
     seed = 0
 
-    regression_error_n_rff(X_train, y_train, X_test, y_test, noise_var, scale)
-    plot_regression_errors(['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3'])
+    regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
+    plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3'])
 
-    # # Fit a GP with kernel 
-    # print 'Start'
-    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    # print 'Done'
-    # # print y_cv - y_cv_gp_kernel
-    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
-
-    # # Fit a GP with random features 
+    # Fit a GP with random features 
     # print 'Start'
     # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
     #                                                     lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
     # print 'Done'
     # print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+    
+    # Fit a GP with kernel 
+    # print 'Start'
+    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    # print 'Done'
+    # # print y_cv - y_cv_gp_kernel
+    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
     # print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
 
     # Fit with kernel trick
