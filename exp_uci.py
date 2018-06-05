@@ -114,32 +114,32 @@ def kernel_error(data_name, X_train, noise_var, scale):
             pickle.dump(errors, f)
     
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale):
-    algo_names = ['iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3']
     n_seeds = 10
-    feature_gen_handles = [lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
-                           lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
-                           lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
-                           lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
-                           lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
-                           lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
-                           lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3)]
+    algos = {'iid':     lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
+            'iid_anti': lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
+            'ort':      lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
+            'ort_anti': lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
+            'HD_1':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
+            'HD_2':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
+            'HD_3':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
+            'greedy':   lambda a, s:               kernels.greedy_angled_gaussian_RFF(a, n_rff, s, scale)}
     
     n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128]
-    n_rffs = [4,8,12,16,24,40,56,72,88,104,128]
-    for algo_name, feature_gen_handle in zip(algo_names, feature_gen_handles):
+    n_rffs = [4,8,16,24,40,56,72,88,104,128]
+    for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
         for n_rff in n_rffs:
             for seed in range(n_seeds):
                 y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, seed))
                 errors[n_rff].append(np.linalg.norm(y_test_fit - y_test) / y_test.shape[0])
-            print n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff]))
+            print algo_name, n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff]))
         with open('%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
     
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
-    errors[n_rffs[-1]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors[n_rffs[-1]] = errors[n_rffs[0]]
     with open('%s_exact_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
 
@@ -152,7 +152,6 @@ def plot_regression_errors(data_name, algo_names):
         means = np.array([np.mean(data[k]) for k in x])
         std_dev = np.sqrt([np.mean(np.square(data[k] - np.mean(data[k]))) for k in x])
         p = plt.plot(x, means, '.-', label = algo_name)
-        print std_dev
         plt.fill_between(x, means - 1.96 * std_dev, means + 1.96 * std_dev, color = p[0].get_color(), alpha = 0.05)
     plt.xscale('log')
     plt.yscale('log')
@@ -169,7 +168,7 @@ if __name__ == '__main__':
     
     X = whiten_data(X)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.7) 
-    X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.667) 
+    X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.667)
     # X_train = 70 % of all data
     # X_test =  20 % of all data
     # X_cv =    10 % of all data
@@ -180,42 +179,35 @@ if __name__ == '__main__':
     seed = 0
 
     # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
-    # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3'])
-    # plot_regression_errors(data_name, ['exact', 'iid', 'ort'])
+    plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'greedy'])
+    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy'])
 
-    # Fit a GP with random features 
-    print 'Start'
-    y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-                                                        lambda a: kernels.ort_gaussian_RFF(a, n_rff, seed, scale))
-    print 'Done'
-    print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
-    
-    # Fit a GP with kernel 
-    print 'Start'
-    y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    print 'Done'
-    print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
-    print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
-
-    # Fit with kernel trick
-    print 'Start'
-    y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    print 'Done'
-    print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
-
-    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-                                                lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
-    y_cv_fit_feature = np.real(y_cv_fit_feature)
-    print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
-
-    # Fit with feature regression
+    # # Fit a GP with random iid features 
     # print 'Start'
-    # for x in np.linspace(0, 1, 11):
-    #     angle = x * np.pi
-        
-    #     y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                                 lambda a: kernels.angled_gaussian_RFF(a, n_rff, seed, scale, angle))
-    #     print x, np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
+    # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+    #                                                     lambda a: kernels.ort_gaussian_RFF(a, n_rff, seed, scale))
     # print 'Done'
-    # print np.linalg.norm(y_cv_fit_kernel - y_cv_fit_feature) / y_cv.shape[0]
-       
+    # print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
+    
+    # # Fit a GP with kernel 
+    # print 'Start'
+    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    # print 'Done'
+    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
+    # print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
+
+    # # Fit with kernel trick
+    # print 'Start'
+    # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    # print 'Done'
+    # print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
+
+    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+    #                                             lambda a: kernels.greedy_angled_gaussian_RFF(a, n_rff, seed, scale))
+    # y_cv_fit_feature = np.real(y_cv_fit_feature)
+    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
+
+    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+    #                                             lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    # y_cv_fit_feature = np.real(y_cv_fit_feature)
+    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]

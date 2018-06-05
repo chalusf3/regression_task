@@ -1,6 +1,7 @@
 import warnings
 import numpy as np
 import scipy.stats as sp_stats
+import scipy.optimize as sp_opt
 
 """
 deterministic Gaussian kernel
@@ -167,6 +168,42 @@ def sample_theta(m):
 # import matplotlib.pyplot as plt
 # plt.hist([sample_theta(3) for _ in range(1000)], 30)
 # plt.show()
+
+def spherical_coord(angles):
+    v = np.ones(angles.shape[0]+1)
+    for idx in range(angles.shape[0]):
+        v[idx]    *= np.cos(angles[idx])
+        v[idx+1:] *= np.sin(angles[idx])
+    return v
+# print spherical_coord(np.array([0,0,0]))
+# print spherical_coord(np.array([np.pi / 2,0,0]))
+
+def greedy_objective_fn(points, new_angle):
+    return -np.mean(np.linalg.norm(points.T - spherical_coord(new_angle), axis = 1))
+
+# TODO: use singleton so that one only needs to do this once
+def greedy_RFF(dim, n_rff):
+    # samples fourier n_rff dim-dimensional frequencies which are as far from each other as possible
+    ret = np.zeros((dim, n_rff))
+    ret[0, 0] = 1
+    for i in range(1, n_rff):
+        optimal = sp_opt.minimize(fun = lambda x: greedy_objective_fn(ret[:, :i], x), 
+                                  x0 = np.pi * 2 * np.random.rand(dim - 1), 
+                                  bounds = [(0, 2 * np.pi)]*(dim-1), 
+                                  tol = 1e-5)
+        ret[:, i] = spherical_coord(optimal.x)
+
+    return ret
+# greedy_RFF(10, 64)
+
+def greedy_angled_gaussian_RFF(X, n_rff, seed, scale):
+    np.random.seed(seed)
+    
+    omega = np.dot(unif_ort_QR(X.shape[1]), greedy_RFF(X.shape[1], n_rff))
+    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
+
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    return PhiX
 
 """
 random Fourier features stacked with Hadamard-Rademacher products
