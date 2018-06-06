@@ -115,14 +115,15 @@ def kernel_error(data_name, X_train, noise_var, scale):
     
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale):
     n_seeds = 10
-    algos = {'iid':     lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
-            'iid_anti': lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
-            'ort':      lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
-            'ort_anti': lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
-            'HD_1':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
-            'HD_2':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
-            'HD_3':     lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
-            'greedy':   lambda a, s:               kernels.greedy_angled_gaussian_RFF(a, n_rff, s, scale)}
+    algos = {'iid':      lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
+            # 'iid_anti':  lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
+            # 'ort':       lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
+            # 'ort_anti':  lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
+            # 'HD_1':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
+            # 'HD_2':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
+            # 'HD_3':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
+            # 'greedy':    lambda a, s:               kernels.greedy_angled_gaussian_RFF(a, n_rff, s, scale), \
+            'greedy_dir':lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)}
     
     n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128]
     n_rffs = [4,8,16,24,40,56,72,88,104,128]
@@ -160,7 +161,7 @@ def plot_regression_errors(data_name, algo_names):
 
 if __name__ == '__main__':
     np.random.seed(0)
-    data_name = ['wine', 'airq'][0]
+    data_name = ['wine', 'airq'][1]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -179,8 +180,8 @@ if __name__ == '__main__':
     seed = 0
 
     # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
-    plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'greedy'])
-    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy'])
+    # # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'greedy'])
+    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy_dir'])
 
     # # Fit a GP with random iid features 
     # print 'Start'
