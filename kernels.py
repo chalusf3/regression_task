@@ -23,10 +23,7 @@ def gaussian_kernel_gram(X, scale):
     return gaussian_kernel(X, X, scale)
 
 def make_antithetic(prods):
-    n_rff = prods.shape[1]
-    if n_rff % 2 != 0:
-        raise Warning('One can only generate a number of antithetic random fourier features congruent to 0 mod 4')
-    return np.concatenate([prods, prods[:, :n_rff/2], -prods[:, n_rff/2:]], axis = 1)
+    return np.concatenate([prods, np.conj(prods)], axis = 1) / np.sqrt(2)
 
 """
 random Fourier features iid
@@ -197,7 +194,12 @@ def greedy_unif_directions(dim, n_rff):
         ret[:, i] = spherical_coord(optimal.x)
 
     return ret
-# greedy_RFF(10, 64)
+# greedy_unif_directions(10, 64)
+# A = greedy_unif_directions(5, 64)
+# print np.linalg.norm(A, axis = 0)
+# import matplotlib.pyplot as plt
+# plt.hist(np.reshape((np.dot(A.T, A)),  -1), 100)
+# plt.show()
 
 def greedy_unif_gaussian_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
@@ -236,6 +238,32 @@ def greedy_dir_gaussian_RFF(X, n_rff, seed, scale):
 
     PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
+
+"""
+Givens approach to generate samples with a certain angles
+"""
+def givens_angled_directions(dim, n_rff, seed, angle):
+    ret = np.zeros((dim, n_rff))
+    np.random.seed(seed)
+    # ret[:, 0] = np.random.normal(size = dim)
+    ret[:, 0] = ret[:, 0] / np.linalg.norm(ret[:, 0])
+    ret[:, 0] = np.ones(dim) / np.sqrt(dim)
+    print ret[:, 0].shape, n_rff
+    ret = np.tile(ret[:, 0, np.newaxis], (1, n_rff))
+    print ret.shape
+    # ret = np.tile(np.eye(dim), (1, int(1.0 + float(n_rff) / dim)))[:, 0:n_rff]
+    for i in range(1, n_rff):
+        idx, jdx = np.random.choice(np.arange(dim), size = 2, replace = False)
+        ret[:, i] = ret[:, i-1]
+        R_mat = np.matrix([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+        ret[[idx, jdx], i] = np.dot(R_mat, ret[[idx, jdx], i])
+    return ret
+# A = givens_angled_directions(20, 30, 0, np.arccos(-0.4))
+# print np.linalg.norm(A, axis = 0)
+# print np.mean(np.dot(A.T, A))
+# import matplotlib.pyplot as plt
+# plt.hist(np.reshape((np.dot(A.T, A)),  -1), 100)
+# plt.show()
 
 """
 random Fourier features stacked with Hadamard-Rademacher products
