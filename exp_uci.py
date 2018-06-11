@@ -64,7 +64,7 @@ def shuffle(X, y):
     return X[p], y[p]
 
 def split_data(X, y, ratio = 0.8):
-    X, y = shuffle(X, y)
+    X, y = shuffle(X[:], y[:])
     
     train_ratio = 0.8
     train_count = int(train_ratio * X.shape[0])
@@ -116,17 +116,21 @@ def kernel_error(data_name, X_train, noise_var, scale):
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale):
     n_seeds = 10
     algos = {'iid':      lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
-            # 'iid_anti':  lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
-            # 'ort':       lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
-            # 'ort_anti':  lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
-            # 'HD_1':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
-            # 'HD_2':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
-            # 'HD_3':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
-            # 'greedy':    lambda a, s:               kernels.greedy_angled_gaussian_RFF(a, n_rff, s, scale), \
-            'greedy_dir':lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)}
+            'iid_anti':  lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
+            'ort':       lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
+            'ort_anti':  lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
+            'HD_1':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 1), \
+            'HD_2':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 2), \
+            'HD_3':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
+            'greedy':    lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale), \
+            'greedy_dir':lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale), \
+            'fastfood':  lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)}
     
-    n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128]
-    n_rffs = [4,8,16,24,40,56,72,88,104,128]
+    test_algos = ['fastfood']#algos.keys()
+    algos = {k: algos[k] for k in test_algos}
+
+    n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,156]
+    n_rffs = [4,8,16,24,40,56,88,104,128,156]
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
         for n_rff in n_rffs:
@@ -176,12 +180,15 @@ if __name__ == '__main__':
 
     noise_var = 1.0
     scale = 8.0
+    degree = 2
+    inhom_term = 1.0
     n_rff = 64
     seed = 0
 
     # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
-    # # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'greedy'])
-    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy_dir'])
+    # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'fastfood'])
+    # plot_regression_errors(data_name, ['exact', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
+    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy', 'greedy_dir'])
 
     # # Fit a GP with random iid features 
     # print 'Start'
@@ -199,16 +206,16 @@ if __name__ == '__main__':
 
     # # Fit with kernel trick
     # print 'Start'
-    # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+    # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.exponential_kernel(a, b, scale))
     # print 'Done'
     # print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
 
     # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.greedy_angled_gaussian_RFF(a, n_rff, seed, scale))
+    #                                             lambda a: kernels.iid_exponential_random_features(a, n_rff, seed, scale))
     # y_cv_fit_feature = np.real(y_cv_fit_feature)
     # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
 
     # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.iid_gaussian_RFF(a, n_rff, seed, scale))
+    #                                             lambda a: kernels.fastfood_RFF(a, n_rff, seed, scale))
     # y_cv_fit_feature = np.real(y_cv_fit_feature)
     # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]

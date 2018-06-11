@@ -1,7 +1,9 @@
-import warnings
+import math
 import numpy as np
 import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
+import scipy.special as sp_spec
+from collections import defaultdict
 
 """
 deterministic Gaussian kernel
@@ -87,7 +89,7 @@ def T_matrix(C):
         T[0, j] = C[0, j] / T[0, 0]
         for i in xrange(1, j):
             T[i, j] = (C[i, j] - np.dot(T[:(i), i].T, T[:(i), j])) / T[i, i]
-        T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T))
+        T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T)) # for normalization purposes
         # if T[j, j] == np.nan:
         #     break
     
@@ -259,6 +261,7 @@ def givens_angled_directions(dim, n_rff, seed, angle):
         ret[[idx, jdx], i] = np.dot(R_mat, ret[[idx, jdx], i])
     return ret
 # A = givens_angled_directions(20, 30, 0, np.arccos(-0.4))
+# A = np.divide(A, np.linalg.norm(A, axis = 0))
 # print np.linalg.norm(A, axis = 0)
 # print np.mean(np.dot(A.T, A))
 # import matplotlib.pyplot as plt
@@ -277,6 +280,16 @@ def hadamard_product(R):
     for _ in range(n):
         R[alt_idx] = np.concatenate([R[0:half_lR] + R[half_lR:], R[0:half_lR] - R[half_lR:]])
     return R
+# A = hadamard_product(np.eye(16))
+# A[0, :] *= -0.4
+# A = A[:12, :]
+# A = np.divide(A, np.linalg.norm(A, axis = 0))
+# print np.linalg.norm(A, axis = 0)
+# print np.mean(np.dot(A.T, A))
+# print np.round(np.dot(A.T, A), 2)
+# import matplotlib.pyplot as plt
+# plt.hist(np.reshape((np.dot(A.T, A)),  -1), 100)
+# plt.show()
 
 def hadamard_product_rec(R):
     # computes recursively the product H_n * R where H_n is the 2^n x 2^n Hadamard matrix WITHOUT any normalization factor, output is a matrix of +- 1's
@@ -297,6 +310,15 @@ def hadamard_rademacher_product(x, k):
     x = x / np.sqrt(2)**(n*k)
     return x
 
+def stack_power_hadamard_rademacher(x, n_blocks):
+    # returns (I*x, HD*x, HDHD*x, ..., HDHD...HD*x)^T 
+    ret = np.zeros((x.shape[0] * n_blocks, x.shape[1]))
+    ret[0:x.shape[0], :] = x
+    for r in range(1, n_blocks):
+        ret[(r * x.shape[0]):((r+1) * x.shape[0]), :] = hadamard_rademacher_product(ret[((r-1) * x.shape[0]):(r * x.shape[0]), :], 1)
+    return ret
+# print stack_power_hadamard_rademacher(np.eye(8), 10)
+
 def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
     original_dimension = X.shape[1] # dimension of input feature vector
@@ -304,23 +326,106 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     X = np.pad(X, ((0,0), (0,HD_dim-X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
     
     # The output of hadamard_rademacher_product is a (HD_dim, x.shape[1]) matrix. We stack ceil(n_rff/HD_dim) of those to get a (ceil(n_rff/HD_dim)*HD_dim, x.shape[1]) matrix
-    X = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
-    # X is now of shape (X.shape[0], ceil(n_rff / HD_dim) * HD_dim)
-    
+    K = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
+    # K is now of shape (K.shape[0], ceil(n_rff / HD_dim) * HD_dim)
+    del X
     # Then we discard some columns from the last block
     idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
     idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
-    X = np.concatenate([X[:, 0:idx_last_block], X[:, idx_last_block + idx]], axis = 1)
+    K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
 
     # Scale all rows independently so that they're marginally Gaussian
-    X *= np.sqrt(float(HD_dim) / original_dimension)
+    K *= np.sqrt(float(HD_dim) / original_dimension)
     norms = np.sqrt(np.random.chisquare(df = original_dimension, size = (1, n_rff)))
-    X = norms * X
+    K = norms * K
     
-    return X
+    return K
 
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
     K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
     PhiX = np.exp(1j * K) / np.sqrt(n_rff)
     return PhiX
+
+
+"""
+fastfood
+"""
+def fastfood_prod(x):
+    """ x must have shape (dimension, n_vec) (e.g. samples are columns) """
+    d = x.shape[0]
+    B = -1.0 + 2.0 * np.random.binomial(1, 0.5, size = (d, 1))
+    P = np.arange(d)
+    np.random.shuffle(P)
+    G = np.random.normal(size = (d, 1))
+    S = np.sqrt(np.random.chisquare(df = d, size = (d, 1))) / np.linalg.norm(G)
+    
+    K = np.multiply(B, x) # B * X
+    K = hadamard_product(K) # H * B*X
+    K = K[P, :] # P * H*B*K
+    K = np.multiply(G, K) # G * P*H*B*K
+    K = hadamard_product(K) # H * G*P*H*B*K
+    K = np.multiply(S, K) # S * H*G*P*H*B*K
+    K = K / np.sqrt(d) # TODO: check that divide by sqrt(HD_dim) and not sqrt(original_dimension)?
+    return K
+
+def fastfood_RFF(X, n_rff, seed, scale):
+    """ X must have shape (n_vec, dimension) (e.g. samples are ROWS) """
+    np.random.seed(seed)
+
+    # Embed rows of X in dimension 2^k = HD_dim
+    original_dimension = X.shape[1] # dimension of input feature vector
+    HD_dim = 2 ** (int(np.ceil(np.log(X.shape[1]) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
+    X = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
+
+    K = np.concatenate([fastfood_prod(X.T) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 0).T
+    
+    # Then we discard some columns from the last block
+    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
+    idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
+    
+    K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
+    
+    K = K / scale * np.sqrt(HD_dim) / np.sqrt(original_dimension)
+
+    return np.exp(1j * K) / np.sqrt(n_rff)
+
+"""
+scalar product based kernels
+"""
+def iid_scalar_prod_random_features(X, n_features, mclaurin_coeff):
+    """
+    mclaurin_coeff must be function handle of an integer n>=0
+    """
+    # Ns = np.random.geometric(p = 0.5, size = (n_features, 1))
+    random_features = np.zeros((X.shape[0], n_features))
+    N_mclaurin = np.random.geometric(p = 0.5, size = n_features) # point until which we compute the mclaurin expansion
+    for idx in range(n_features):
+        random_features[:, idx] = np.squeeze(np.prod(np.dot(X, -1.0 + 2.0 * np.random.binomial(1, 0.5, size = (X.shape[1], N_mclaurin[idx]))), axis = 1))
+        random_features[:, idx] = np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * 0.5**(N_mclaurin[idx] + 1)) * random_features[:, idx]
+    # random_features = np.sqrt(mclaurin_coeff[Ns] * np.power(0.5, Ns+1)) * random_features
+    return random_features
+
+"""
+iid polynomial kernel
+"""
+def polynomial_sp_kernel(X, loc, degree, inhom_term):
+    return np.power(np.dot(X, loc.T) + inhom_term, degree)
+
+def iid_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term):
+    def mclaurin_coeff(k):
+        return inhom_term ** (degree - k) * sp_spec.comb(degree, k, exact = False)
+    np.random.seed(seed)
+    return iid_scalar_prod_random_features(X, n_rff, mclaurin_coeff)
+
+"""
+exponential kernel
+"""
+def exponential_sp_kernel(X, loc, scale):
+    return np.exp(np.dot(X, loc.T) / scale ** 2)
+
+def iid_exponential_sp_random_features(X, n_rff, seed, scale):
+    def mclaurin_coeff(k):
+        return 1.0 / math.factorial(k) / scale ** (2 * k)
+    np.random.seed(seed)
+    return iid_scalar_prod_random_features(X, n_rff, mclaurin_coeff)
