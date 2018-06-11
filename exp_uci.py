@@ -113,7 +113,7 @@ def kernel_error(data_name, X_train, noise_var, scale):
         with open('%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
     
-def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale):
+def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     n_seeds = 10
     algos = {'iid':      lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
             'iid_anti':  lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
@@ -124,9 +124,11 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
             'HD_3':      lambda a, s:                         kernels.HD_gaussian_RFF( a, n_rff, s, scale, 3), \
             'greedy':    lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale), \
             'greedy_dir':lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale), \
-            'fastfood':  lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)}
-    
-    test_algos = ['fastfood']#algos.keys()
+            'fastfood':  lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale), \
+            'iid_polynomial_sp': lambda a, s:   kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term), \
+            'iid_exponential_sp': lambda a, s: kernels.iid_exponential_sp_random_features(a, n_rff, s, scale)}
+
+    test_algos = ['polynomial_sp'] # algos.keys()
     algos = {k: algos[k] for k in test_algos}
 
     n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,156]
@@ -137,15 +139,32 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
             for seed in range(n_seeds):
                 y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, seed))
                 errors[n_rff].append(np.linalg.norm(y_test_fit - y_test) / y_test.shape[0])
-            print algo_name, n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff]))
+            print '{} {} \t{} \t{}'.format(algo_name, n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff])))
         with open('%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
-    
+
+def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
+    n_rffs = [4,156]
+
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
-    with open('%s_exact_krr.pk' % data_name, 'wb') as f:
+    with open('%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
+        pickle.dump(errors, f)
+    
+    errors = {}
+    y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
+    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors[n_rffs[-1]] = errors[n_rffs[0]]
+    with open('%s_exact_exp_sp_krr.pk' % data_name, 'wb') as f:
+        pickle.dump(errors, f)
+    
+    errors = {}
+    y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
+    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors[n_rffs[-1]] = errors[n_rffs[0]]
+    with open('%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
 
 def plot_regression_errors(data_name, algo_names):
@@ -185,10 +204,13 @@ if __name__ == '__main__':
     n_rff = 64
     seed = 0
 
-    # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale)
-    # plot_regression_errors(data_name, ['exact', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'fastfood'])
-    # plot_regression_errors(data_name, ['exact', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
-    # plot_regression_errors(data_name, ['exact', 'iid', 'greedy', 'greedy_dir'])
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+
+    # regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'fastfood'])
+    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
+    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'exact_exp_sp', 'exact_poly_sp', 'iid_exponential_sp', 'iid_polynomial_sp'])
+    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'greedy', 'greedy_dir'])
 
     # # Fit a GP with random iid features 
     # print 'Start'
@@ -210,10 +232,10 @@ if __name__ == '__main__':
     # print 'Done'
     # print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
 
-    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.iid_exponential_random_features(a, n_rff, seed, scale))
-    # y_cv_fit_feature = np.real(y_cv_fit_feature)
-    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
+    y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
+                                                lambda a: kernels.iid_polynomial_sp_random_features(a, n_rff, seed, degree, inhom_term))
+    y_cv_fit_feature = np.real(y_cv_fit_feature)
+    print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
 
     # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
     #                                             lambda a: kernels.fastfood_RFF(a, n_rff, seed, scale))
