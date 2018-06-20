@@ -39,6 +39,24 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     return PhiX
 
 """
+attempt at pairing frequencies so that we get a factor of e^{+- ipi} in the next feature
+"""
+def approx_antithetic_RFF(X, n_rff, seed, scale, main_axis):
+    # main_axis given as a row (1, dim) vector
+    np.random.seed(seed)
+    omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff / 2)) # each column is a random frequency
+    omega = omega / np.linalg.norm(omega, axis = 0)
+    omega2 = omega - 2 * np.dot(main_axis, omega) * main_axis[:, np.newaxis]
+    
+    norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff / 2)))
+    omega *= norms
+    omega2 *= norms
+    omega = np.concatenate([omega, omega2], axis = 1)
+
+    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    return PhiX
+
+"""
 random Fourier features stack iid orthogonal
 """
 def unif_ort(dim): 
@@ -57,13 +75,17 @@ def stacked_unif_ort(shape):
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
     G = G[:, :shape[1]]
     return G
+# A = stacked_unif_ort((3, 7))
+# print np.round(np.dot(A.T, A), decimals = 2)
 
 def unif_ort_gaussian(shape): 
-    # generates a matrix with shape[1] orthogonal columns of lengths shape[0], each marginally gaussian
+    # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each marginally gaussian (the columns are the sampled frequencies)
     G = stacked_unif_ort(shape)
     norms = np.sqrt(np.random.chisquare(df = shape[0], size = (1, shape[1])))
+    # print G, norms, np.multiply(norms, G)
     G = np.multiply(norms, G)
     return G
+# unif_ort_gaussian((3, 2))
 
 def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
@@ -176,6 +198,37 @@ def spherical_coord(angles):
     return v
 # print spherical_coord(np.array([0,0,0]))
 # print spherical_coord(np.array([np.pi / 2,0,0]))
+
+def angled_neighbours(dim, n_samples, angle):
+    ret = np.zeros((dim, n_samples))
+    ret[:, 0] = np.random.normal(size = dim)
+    ret[:, 0] /= np.linalg.norm(ret[:, 0])
+
+    scalar_product = np.cos(angle)
+
+    for idx in range(1, n_samples):
+        ret[:, idx] = np.random.normal(size = dim)
+        ret[:, idx] /= np.linalg.norm(ret[:, idx])
+        b = np.sqrt((1.0 - scalar_product ** 2) / (1.0 - np.dot(ret[:, idx - 1].T, ret[:, idx]) ** 2))
+        a = scalar_product - b * np.dot(ret[:, idx - 1].T, ret[:, idx])
+        ret[:, idx] = a * ret[:, idx - 1] + b * ret[:, idx]
+
+    return ret
+# A = angled_neighbours(5, 10, np.pi / 2 * 1.3)
+# print np.round(np.dot(A.T, A), decimals = 2)
+# print np.mean(np.dot(A.T, A)), 1.0 / A.shape[1]
+# import matplotlib.pyplot as plt
+# plt.hist(np.reshape((np.dot(A.T, A)),  -1), 100)
+# plt.show()
+
+def angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle):
+    np.random.seed(seed)
+    
+    omega = angled_neighbours(X.shape[1], n_rff, angle)
+    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
+
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    return PhiX
 
 """
 greedy approach to generate samples by taking directions as far from each other as possible
@@ -359,7 +412,11 @@ def HD_gaussian_RFF(X, n_rff, seed, scale, k):
 fastfood
 """
 def fastfood_prod(x):
-    """ x must have shape (dimension, n_vec) (e.g. samples are columns) """
+    """ 
+    x must have shape (dimension, n_vec) (e.g. samples are columns) 
+    dimension must be a power of 2
+    returns SHGPiHBx / sqrt(d)
+    """
     d = x.shape[0]
     B = -1.0 + 2.0 * np.random.binomial(1, 0.5, size = (d, 1))
     P = np.arange(d)
@@ -412,7 +469,7 @@ def iid_scalar_prod_random_features(X, n_features, mclaurin_coeff):
             Omega = -1 + 2 * np.random.binomial(1, 0.5, size = (X.shape[1], N_mclaurin[idx]))
             random_features[:, idx] = np.squeeze(np.prod(np.dot(X, Omega), axis = 1))
         else:
-            random_features[:, idx] = np.ones(shape = (X.shape[0], 1))
+            random_features[:, idx] = np.ones(shape = X.shape[0])
         
         random_features[:, idx] *= np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) 
     return random_features / np.sqrt(n_features)
