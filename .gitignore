@@ -1,3 +1,4 @@
+output/*
 trash*
 .DS_Store
 *.pk
