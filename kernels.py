@@ -372,12 +372,28 @@ def stack_power_hadamard_rademacher(x, n_blocks):
     return ret
 # print stack_power_hadamard_rademacher(np.eye(8), 10)
 
+def embed_in_power_of_two(X): # embeds X in (X.shape[0], 2^l) where 2^l is the next highest power of two. Embeds the rows!
+    original_dimension = X.shape[1]
+    HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
+    newX = np.zeros((X.shape[0], HD_dim))
+    indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
+    newX[:, indices] = X
+
+    # newX = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
+
+    return newX
+
 def stacked_hadamard_rademacher(X, n_rff, k):
     # returns the product of X.T with orthogonal vectors, approximately of unit length. 
     original_dimension = X.shape[1] # dimension of input feature vector
-    HD_dim = 2 ** (int(np.ceil(np.log(X.shape[1]) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
-    X = np.pad(X, ((0,0), (0,HD_dim-X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
-    
+    # HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
+    # X = np.pad(X, ((0,0), (0,HD_dim-original_dimension)), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
+    # newX = np.zeros((X.shape[0], HD_dim))
+    # indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
+    # newX[:, indices] = X
+    X = embed_in_power_of_two(X)
+    HD_dim = X.shape[1]
+
     # The output of hadamard_rademacher_product is a (HD_dim, x.shape[1]) matrix. We stack ceil(n_rff/HD_dim) of those to get a (ceil(n_rff/HD_dim)*HD_dim, x.shape[1]) matrix
     K = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
     # K is now of shape (K.shape[0], ceil(n_rff / HD_dim) * HD_dim)
@@ -439,8 +455,10 @@ def fastfood_RFF(X, n_rff, seed, scale):
 
     # Embed rows of X in dimension 2^k = HD_dim
     original_dimension = X.shape[1] # dimension of input feature vector
-    HD_dim = 2 ** (int(np.ceil(np.log(X.shape[1]) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
-    X = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
+    X = embed_in_power_of_two(X)
+    HD_dim = X.shape[1]
+    # HD_dim = 2 ** (int(np.ceil(np.log(X.shape[1]) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
+    # X = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
 
     K = np.concatenate([fastfood_prod(X.T) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 0).T
     
@@ -455,36 +473,131 @@ def fastfood_RFF(X, n_rff, seed, scale):
     return np.exp(1j * K) / np.sqrt(n_rff)
 
 """
-scalar product based kernels
+polynomial kernel using unit length random projections
 """
-def iid_scalar_prod_random_features(X, n_features, mclaurin_coeff):
+def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0):
     """
-    mclaurin_coeff must be function handle of an integer n>=0
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree
     """
-    p = 0.5
-    random_features = np.zeros((X.shape[0], n_features))
-    N_mclaurin = np.random.geometric(p = p, size = n_features) - 1 # point until which we compute the mclaurin expansion
-    for idx in range(n_features):
-        if N_mclaurin[idx] > 0:
-            Omega = -1 + 2 * np.random.binomial(1, 0.5, size = (X.shape[1], N_mclaurin[idx]))
-            random_features[:, idx] = np.squeeze(np.prod(np.dot(X, Omega), axis = 1))
-        else:
-            random_features[:, idx] = np.ones(shape = X.shape[0])
-        
-        random_features[:, idx] *= np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) 
-    return random_features / np.sqrt(n_features)
+    if inhom_term != 0:
+        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
+        return iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0)
 
-def HD_scalar_prod_random_features(X, n_features, mclaurin_coeff):
-    p = 0.5
-    random_features = np.zeros((X.shape[0], n_features))
-    N_mclaurin = np.random.geometric(p = p, size = n_features) - 1# point until which we compute the mclaurin expansion
-    for idx in range(n_features):
-        if N_mclaurin[idx] > 0:
-            random_features[:, idx] = np.prod(X.shape[1] * stacked_hadamard_rademacher(X, N_mclaurin[idx], 1), axis = 1)
-        else:
-            random_features[:, idx] = np.ones(shape = (X.shape[0], 1))
-        random_features[:, idx] = np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) * random_features[:, idx]
-    return random_features / np.sqrt(n_features)
+    np.random.seed(seed)
+    iid_freq = np.random.normal(size = (X.shape[1], n_features * degree))
+    PhiX = np.dot(X, iid_freq)
+    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+
+    return PhiX
+
+def iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
+    """
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree
+    """
+    if inhom_term != 0:
+        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
+        return iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+    
+    dim = X.shape[1]
+
+    np.random.seed(seed)
+    iid_freq = np.random.normal(size = (dim, n_features * degree))
+    iid_freq /= np.linalg.norm(iid_freq, axis = 0)[np.newaxis, :]
+    iid_freq *= np.sqrt(dim)
+    PhiX = np.dot(X, iid_freq)
+    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+
+    return PhiX
+
+def ort_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
+    """
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random orthonormal projections
+    """
+    if inhom_term != 0:
+        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
+        return ort_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+    
+    dim = X.shape[1]
+
+    np.random.seed(seed)
+    ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
+    PhiX = np.dot(X, ort_freq) * np.sqrt(dim)
+    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+
+    return PhiX
+
+def ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inhom_term = 0):
+    """
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random orthonormal projections
+    """
+    if inhom_term != 0:
+        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
+        return ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inhom_term = 0)
+    
+    dim = X.shape[1]
+
+    np.random.seed(seed)
+    ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
+    ort_freq *= np.sqrt(np.random.chisquare(df = dim, size = (1, degree * n_features)))
+    PhiX = np.dot(X, ort_freq)# * np.sqrt(dim)
+    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+
+    return PhiX
+
+
+def HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
+    """
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random HD projections
+    """
+    if inhom_term != 0:
+        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
+        return HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+    
+    dim = X.shape[1]
+
+    np.random.seed(seed)
+    HD_freq = np.concatenate([stacked_hadamard_rademacher(np.eye(dim), n_features, 1) for _ in range(degree)], axis = 1)
+    PhiX = np.dot(X, HD_freq) * np.sqrt(dim)
+    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+
+    return PhiX
+
+# """
+# scalar product based kernels
+# """
+# def iid_scalar_prod_random_features(X, n_features, mclaurin_coeff):
+#     """
+#     mclaurin_coeff must be function handle of an integer n>=0
+#     """
+#     p = 0.5
+#     random_features = np.zeros((X.shape[0], n_features))
+#     N_mclaurin = np.random.geometric(p = p, size = n_features) - 1 # point until which we compute the mclaurin expansion
+#     for idx in range(n_features):
+#         if N_mclaurin[idx] > 0:
+#             Omega = -1 + 2 * np.random.binomial(1, 0.5, size = (X.shape[1], N_mclaurin[idx]))
+#             random_features[:, idx] = np.squeeze(np.prod(np.dot(X, Omega), axis = 1))
+#         else:
+#             random_features[:, idx] = np.ones(shape = X.shape[0])
+#         
+#         random_features[:, idx] *= np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) 
+#     return random_features / np.sqrt(n_features)
+# 
+# def HD_scalar_prod_random_features(X, n_features, mclaurin_coeff):
+#     p = 0.5
+#     random_features = np.zeros((X.shape[0], n_features))
+#     N_mclaurin = np.random.geometric(p = p, size = n_features) - 1# point until which we compute the mclaurin expansion
+#     for idx in range(n_features):
+#         if N_mclaurin[idx] > 0:
+#             random_features[:, idx] = np.prod(X.shape[1] * stacked_hadamard_rademacher(X, N_mclaurin[idx], 1), axis = 1)
+#         else:
+#             random_features[:, idx] = np.ones(shape = (X.shape[0], 1))
+#         random_features[:, idx] = np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) * random_features[:, idx]
+#     return random_features / np.sqrt(n_features)
 
 """
 iid polynomial kernel
@@ -492,19 +605,19 @@ iid polynomial kernel
 def polynomial_sp_kernel(X, loc, degree, inhom_term):
     return np.power(np.dot(X, loc.T) + inhom_term, degree)
 
-def mclaurin_coeff_generic(k, degree, inhom_term):
-    if k > degree: 
-        return 0
-    else:
-        return inhom_term ** (degree - k) * sp_spec.comb(degree, k, exact = False)
+# def mclaurin_coeff_generic(k, degree, inhom_term):
+#     if k > degree: 
+#         return 0
+#     else:
+#         return inhom_term ** (degree - k) * sp_spec.comb(degree, k, exact = False)
 
-def iid_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term):    
-    np.random.seed(seed)
-    return iid_scalar_prod_random_features(X, n_rff, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
+# def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term):    
+#     np.random.seed(seed)
+#     return iid_scalar_prod_random_features(X, n_features, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
 
-def HD_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term):
-    np.random.seed(seed)
-    return HD_scalar_prod_random_features(X, n_rff, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
+# def HD_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term):
+#     np.random.seed(seed)
+#     return HD_scalar_prod_random_features(X, n_features, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
 
 """
 exponential kernel
@@ -512,8 +625,8 @@ exponential kernel
 def exponential_sp_kernel(X, loc, scale):
     return np.exp(np.dot(X, loc.T) / scale ** 2)
 
-def iid_exponential_sp_random_features(X, n_rff, seed, scale):
-    def mclaurin_coeff(k):
-        return 1.0 / math.factorial(k) / scale ** (2 * k)
-    np.random.seed(seed)
-    return iid_scalar_prod_random_features(X, n_rff, mclaurin_coeff)
+# def iid_exponential_sp_random_features(X, n_rff, seed, scale):
+#     def mclaurin_coeff(k):
+#         return 1.0 / math.factorial(k) / scale ** (2 * k)
+#     np.random.seed(seed)
+#     return iid_scalar_prod_random_features(X, n_rff, mclaurin_coeff)
