@@ -13,10 +13,10 @@ def squared_exponential_kernel():
     algos = {'iid':      lambda X, n_rff, seed: kernels.iid_gaussian_RFF(X, n_rff, seed, scale), \
             'iid_anti':  lambda X, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(X, n_rff, seed, scale)), \
             'ort':       lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale), \
-            'ort_anti':  lambda X, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(X, n_rff, seed, scale))}#, \
-            # 'HD_1':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1), \
-            # 'HD_2':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2), \
-            # 'HD_3':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3)}
+            'ort_anti':  lambda X, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(X, n_rff, seed, scale)), \
+            'HD_1':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1), \
+            'HD_2':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2), \
+            'HD_3':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3)}
     plt.figure(figsize = (8,6))
     results = {}
     for algo_name, feature_handle in algos.items():
@@ -40,21 +40,24 @@ def squared_exponential_kernel():
         # plt.fill_between(x, y - stds, y + stds, color = p[0].get_color(), alpha = 0.05)
     plt.yscale('log')
     plt.legend()
-    plt.title('Pointwise kernel approximation error')
+    plt.title('Pointwise SE kernel approximation error')
     plt.xlabel('Number of random features')
     plt.xlim(0)
-    plt.ylabel('Mean pointwise error')
+    plt.ylabel('Mean pointwise error in SE kernel')
     plt.tight_layout()
     plt.savefig('pointwise.eps', bbox_inches = 'tight')
     plt.show()
 
 def polynomial_kernel():
     dim = 10
-    degree = 2
+    degree = 3
     inhom_term = 1
-    n_seeds = 30
+    n_seeds = 1000
     algos = {'iid': lambda X, n_rff, seed: kernels.iid_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term), \
-             'HD':  lambda X, n_rff, seed:  kernels.HD_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term)}
+             'iid_unit': lambda X, n_rff, seed: kernels.iid_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term), \
+             'ort': lambda X, n_rff, seed: kernels.ort_polynomial_sp_random_gaussian_features(X, n_rff, seed, degree, inhom_term), \
+             'ort_unit': lambda X, n_rff, seed: kernels.ort_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term), \
+             'HD':  lambda X, n_rff, seed:  kernels.HD_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term)}
     plt.figure(figsize = (8,6))
     results = {}
     for algo_name, feature_handle in algos.items():
@@ -65,6 +68,8 @@ def polynomial_kernel():
                 np.random.seed(seed)
                 x = np.random.normal(size = (1, dim))
                 y = np.random.normal(size = (1, dim))
+                x /= np.linalg.norm(x)
+                y /= np.linalg.norm(y)
                 true_K = kernels.polynomial_sp_kernel(x, y, degree, inhom_term)
                 
                 Phix = feature_handle(x, n_rff, seed)
@@ -74,12 +79,13 @@ def polynomial_kernel():
                 results[algo_name][n_rff].append(float(np.abs(est_K - true_K)))
         x = np.array(sorted(results[algo_name].keys()))
         y = np.array([np.mean(results[algo_name][k]) for k in x])
+        print algo_name, y[-1]
         # stds = np.array([np.std(results[algo_name][k]) for k in x])
         p = plt.plot(x, y, label = algo_name.replace('_', '\_'))
         # plt.fill_between(x, y - stds, y + stds, color = p[0].get_color(), alpha = 0.05)
     plt.yscale('log')
     plt.legend()
-    plt.title('Pointwise kernel approximation error')
+    plt.title('Pointwise polyn kernel approximation error')
     plt.xlabel('Number of random features')
     plt.xlim(0)
     plt.ylabel('Mean pointwise error polyn kernel')
@@ -89,4 +95,5 @@ def polynomial_kernel():
 
 
 if __name__ == '__main__':
-    polynomial_kernel()
+    squared_exponential_kernel()
+    # polynomial_kernel()
