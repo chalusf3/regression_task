@@ -24,8 +24,8 @@ def gaussian_kernel_gram(X, scale):
     # X is given with rows as sample vectors (size n_samples x dimension_samples)
     return gaussian_kernel(X, X, scale)
 
-def make_antithetic(prods):
-    return np.concatenate([prods, np.conj(prods)], axis = 1) / np.sqrt(2)
+def make_antithetic(feats):
+    return np.concatenate([feats, np.conj(feats)], axis = 1) / np.sqrt(2)
 
 """
 random Fourier features iid
@@ -73,7 +73,9 @@ def stacked_unif_ort(shape):
     # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
     G = [unif_ort_QR(shape[0]) for _ in range(int(np.ceil(float(shape[1]) / shape[0])))]
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
-    G = G[:, :shape[1]]
+    # G = G[:, :shape[1]]
+    idx = np.random.choice(G.shape[1], size = shape[1], replace = False)
+    G = G[:, idx]
     return G
 # A = stacked_unif_ort((3, 7))
 # print np.round(np.dot(A.T, A), decimals = 2)
@@ -375,11 +377,12 @@ def stack_power_hadamard_rademacher(x, n_blocks):
 def embed_in_power_of_two(X): # embeds X in (X.shape[0], 2^l) where 2^l is the next highest power of two. Embeds the rows!
     original_dimension = X.shape[1]
     HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
-    newX = np.zeros((X.shape[0], HD_dim))
-    indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
-    newX[:, indices] = X
+    
+    # newX = np.zeros((X.shape[0], HD_dim))
+    # indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
+    # newX[:, indices] = X
 
-    # newX = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
+    newX = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
 
     return newX
 
@@ -399,9 +402,12 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     # K is now of shape (K.shape[0], ceil(n_rff / HD_dim) * HD_dim)
     del X
     # Then we discard some columns from the last block
-    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
-    idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
-    K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
+    # idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
+    # idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
+    # K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
+
+    idx = np.random.choice(K.shape[1], size = n_rff, replace = False)
+    K = K[:, idx]
 
     # Scale all rows independently so that they're approximately unit length
     K *= np.sqrt(float(HD_dim) / original_dimension)
@@ -472,6 +478,8 @@ def fastfood_RFF(X, n_rff, seed, scale):
 
     return np.exp(1j * K) / np.sqrt(n_rff)
 
+
+#TODO: abstract all those in 1. a function mapping matrix np.dot(X, freq) to full PhiX
 """
 polynomial kernel using unit length random projections
 """
@@ -479,25 +487,27 @@ def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 
     """
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree
     """
+
     if inhom_term != 0:
-        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
-        return iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0)
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
 
     np.random.seed(seed)
     iid_freq = np.random.normal(size = (X.shape[1], n_features * degree))
     PhiX = np.dot(X, iid_freq)
-    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
-
+    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    
     return PhiX
+# Phi = iid_polynomial_sp_random_features(np.eye(4), 10000, 0, 1, inhom_term = 0)
+# print np.dot(Phi, Phi.T)
+
 
 def iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
     """
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree
     """
     if inhom_term != 0:
-        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
-        return iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
     
     dim = X.shape[1]
 
@@ -506,8 +516,8 @@ def iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_te
     iid_freq /= np.linalg.norm(iid_freq, axis = 0)[np.newaxis, :]
     iid_freq *= np.sqrt(dim)
     PhiX = np.dot(X, iid_freq)
-    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
 
     return PhiX
 
@@ -516,16 +526,15 @@ def ort_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_te
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random orthonormal projections
     """
     if inhom_term != 0:
-        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
-        return ort_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
     
     dim = X.shape[1]
 
     np.random.seed(seed)
     ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
     PhiX = np.dot(X, ort_freq) * np.sqrt(dim)
-    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
 
     return PhiX
 
@@ -534,8 +543,7 @@ def ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inho
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random orthonormal projections
     """
     if inhom_term != 0:
-        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
-        return ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inhom_term = 0)
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
     
     dim = X.shape[1]
 
@@ -543,8 +551,8 @@ def ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inho
     ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
     ort_freq *= np.sqrt(np.random.chisquare(df = dim, size = (1, degree * n_features)))
     PhiX = np.dot(X, ort_freq)# * np.sqrt(dim)
-    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
+    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
 
     return PhiX
 
@@ -554,17 +562,16 @@ def HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_ter
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random HD projections
     """
     if inhom_term != 0:
-        X = np.concatenate([np.sqrt(inhom_term) * np.ones((X.shape[0], 1)), X], axis = 1)
-        return HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0)
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
     
     dim = X.shape[1]
 
     np.random.seed(seed)
     HD_freq = np.concatenate([stacked_hadamard_rademacher(np.eye(dim), n_features, 1) for _ in range(degree)], axis = 1)
     PhiX = np.dot(X, HD_freq) * np.sqrt(dim)
-    PhiX = [np.prod(PhiX[:, l::n_features], axis = 1) for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = -1) / np.sqrt(n_features)
-
+    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    
     return PhiX
 
 # """
