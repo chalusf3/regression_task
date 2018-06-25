@@ -389,11 +389,6 @@ def embed_in_power_of_two(X): # embeds X in (X.shape[0], 2^l) where 2^l is the n
 def stacked_hadamard_rademacher(X, n_rff, k):
     # returns the product of X.T with orthogonal vectors, approximately of unit length. 
     original_dimension = X.shape[1] # dimension of input feature vector
-    # HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
-    # X = np.pad(X, ((0,0), (0,HD_dim-original_dimension)), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
-    # newX = np.zeros((X.shape[0], HD_dim))
-    # indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
-    # newX[:, indices] = X
     X = embed_in_power_of_two(X)
     HD_dim = X.shape[1]
 
@@ -401,11 +396,8 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     K = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
     # K is now of shape (K.shape[0], ceil(n_rff / HD_dim) * HD_dim)
     del X
-    # Then we discard some columns from the last block
-    # idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
-    # idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
-    # K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
-
+    
+    # Then we discard some columns 
     idx = np.random.choice(K.shape[1], size = n_rff, replace = False)
     K = K[:, idx]
 
@@ -418,7 +410,6 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
 
     K = stacked_hadamard_rademacher(X, n_rff, k)
-
     norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff)))
     K = norms * K
     
@@ -477,9 +468,6 @@ def fastfood_RFF(X, n_rff, seed, scale):
     K = K / scale * np.sqrt(HD_dim) / np.sqrt(original_dimension)
 
     return np.exp(1j * K) / np.sqrt(n_rff)
-
-
-#TODO: abstract all those in 1. a function mapping matrix np.dot(X, freq) to full PhiX
 """
 polynomial kernel using unit length random projections
 """
