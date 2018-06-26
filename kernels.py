@@ -184,10 +184,6 @@ def T_matrix(C):
 #     C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
 # print C
 
-# C = (-1.0/3) * np.ones((4,4))
-# np.fill_diagonal(C, 1)
-# print T_matrix(C)
-
 def angled_block(dim, scal_prod):
     # returns a dim x dim matrix of norm 1 columns having scalar products = scal_prod
     C = np.ones((dim, dim)) * scal_prod
@@ -223,24 +219,6 @@ def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
 
     # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     # return PhiX
-
-"""
-def sample_theta(m):
-    # samples one theta with density = sin(theta)^(m-2) dtheta (e.g. the density of the angle between two random uniform vectors)
-    # use acceptance-rejection sampling with a uniform as dominating density
-
-    u = np.random.uniform()
-    theta = np.pi * np.random.uniform()
-    
-    while u > np.sin(theta)**(m-2):
-        u = np.random.uniform()
-        theta = np.pi * np.random.uniform()
-    
-    return theta
-# import matplotlib.pyplot as plt
-# plt.hist([sample_theta(3) for _ in range(1000)], 30)
-# plt.show()
-"""
 
 def spherical_coord(angles):
     v = np.ones(angles.shape[0]+1)
@@ -463,29 +441,6 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     K *= np.sqrt(float(HD_dim) / original_dimension)
     return K 
 # print stacked_hadamard_rademacher(np.eye(7), 3, 1)
-
-"""
-def hadamard_rademacher_product_scale_chi(X, n_rff, k):
-    # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
-
-    K = stacked_hadamard_rademacher(X, n_rff, k)
-    norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff)))
-    K = norms * K
-    
-    return K
-"""
-
-"""
-def hadamard_rademacher_product_scale_fix_norm(X, n_rff, k):
-    # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
-
-    dim = X.shape[1]
-    K = stacked_hadamard_rademacher(X, n_rff, k)
-    norm = np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
-    K *= norm
-    
-    return K
-"""
 
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
