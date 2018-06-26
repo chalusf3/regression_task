@@ -24,8 +24,47 @@ def gaussian_kernel_gram(X, scale):
     # X is given with rows as sample vectors (size n_samples x dimension_samples)
     return gaussian_kernel(X, X, scale)
 
+"""
+shared utility functions to convert scalar products with unit frequencies into RFF vectors
+"""
+
 def make_antithetic(feats):
     return np.concatenate([feats, np.conj(feats)], axis = 1) / np.sqrt(2)
+
+def RFF_from_prod_iid_gaussian_norm(prods, dim):
+    # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
+    
+    n_rff = prods.shape[1]
+    
+    norms = np.sqrt(np.random.chisquare(df = dim, size = n_rff))
+    prods *= norms
+    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+    
+    return RFF
+
+def RFF_from_prod_fixed_norm(prods, dim):
+    # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
+
+    n_rff = prods.shape[1]
+
+    norm = np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    prods *= norm
+    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+    return RFF
+
+def RFF_from_prod_inv_gaussian_norm(prods, dim):
+    # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
+    # this function generates n_rff / 2 norms, their inverse norms via F(r_1) + F(r_2) = 1 and pointwise multiplies with prods
+
+    n_rff = prods.shape[1]
+
+    norms = np.sqrt(np.random.chisquare(df = dim, size = n_rff / 2))
+    inv_norms = np.sqrt(sp_stats.chi2.ppf(1-sp_stats.chi2.cdf(np.square(norms), dim), dim))
+    prods *= np.concatenate([norms, inv_norms])
+    
+    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+
+    return RFF
 
 """
 random Fourier features iid
@@ -34,8 +73,29 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     # returns the matrix (exp(j<omega_{1}, X>), ..., exp(j<omega_{n_rff}, X>) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
-    omega = np.random.normal(loc = 0.0, scale = 1.0 / scale, size = (X.shape[1], n_rff)) # random frequencies
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    omega = np.random.normal(size = (X.shape[1], n_rff)) # random frequencies in columns
+    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    return PhiX
+
+def iid_fix_norm_RFF(X, n_rff, seed, scale):
+    np.random.seed(seed)
+    dim = X.shape[1]
+    omega = np.random.normal(size = (X.shape[1], n_rff))
+    omega = omega / np.linalg.norm(omega, axis = 0)
+    omega *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    return PhiX
+
+def iid_invnorm_gaussian_RFF(X, n_rff, seed, scale):
+    # returns the matrix (exp(j<omega_{1}, X>), ..., exp(j<omega_{n_rff}, X>) / sqrt(n_rff)
+    # where omega_{i} are i.i.d. N(0, 1/scale^2)
+    np.random.seed(seed)
+    omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff)) # random frequencies
+    omega /= np.linalg.norm(omega, axis = 0)
+    prods = np.dot(X, omega) / scale
+    # prods = np.concatenate([prods[:, 0:n_rff/2], -prods[:, 0:n_rff/2]], axis = 1)
+    PhiX = inv_norm_from_dir(prods, X.shape[1])
+    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
 
 """
@@ -83,17 +143,33 @@ def stacked_unif_ort(shape):
 def unif_ort_gaussian(shape): 
     # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each marginally gaussian (the columns are the sampled frequencies)
     G = stacked_unif_ort(shape)
-    norms = np.sqrt(np.random.chisquare(df = shape[0], size = (1, shape[1])))
-    # print G, norms, np.multiply(norms, G)
+    dim = shape[0]
+    norms = np.sqrt(np.random.chisquare(df = dim, size = (1, shape[1])))
+    
     G = np.multiply(norms, G)
     return G
 # unif_ort_gaussian((3, 2))
+
+def unif_ort_fix_norm(shape):
+    # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each with norm equal to the mean norm
+    G = stacked_unif_ort(shape)
+    dim = shape[0]
+    G *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    return G
 
 def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     omega = unif_ort_gaussian((X.shape[1], n_rff)) / scale
+    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    return PhiX
+
+def ort_fix_norm_RFF(X, n_rff, seed, scale):
+    # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
+    # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
+    np.random.seed(seed)
+    omega = unif_ort_fix_norm((X.shape[1], n_rff)) / scale
     PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
 
@@ -227,7 +303,8 @@ def angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle):
     np.random.seed(seed)
     
     omega = angled_neighbours(X.shape[1], n_rff, angle)
-    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
+    norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff)))
+    omega = np.multiply(norms, omega / scale)
 
     PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
     return PhiX
@@ -415,11 +492,28 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     
     return K
 
+def hadamard_rademacher_product_scale_fix_norm(X, n_rff, k):
+    # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
+
+    dim = X.shape[1]
+    K = stacked_hadamard_rademacher(X, n_rff, k)
+    norm = np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    K *= norm
+    
+    return K
+
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
     K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
     PhiX = np.exp(1j * K) / np.sqrt(n_rff)
     return PhiX
+
+def HD_fix_norm_RFF(X, n_rff, seed, scale, k):
+    np.random.seed(seed)
+    K = hadamard_rademacher_product_scale_fix_norm(X, n_rff, k) / scale
+    PhiX = np.exp(1j * K) / np.sqrt(n_rff)
+    return PhiX
+
 
 """
 fastfood
