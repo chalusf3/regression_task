@@ -9,20 +9,25 @@ plt.rc('font', family='serif')
 
 def squared_exponential_kernel():
     dim = 30
-    scale = 0.5
+    scale = np.sqrt(dim) * 2
     n_seeds = 100
-    angle = np.pi / 2 * 1.2
-    print angle, angle / (np.pi / 2)
-    algos = {'iid':      lambda X, n_rff, seed: kernels.iid_gaussian_RFF(X, n_rff, seed, scale), \
-            'iid_anti':  lambda X, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(X, n_rff / 2, seed, scale)), \
-            'ort':       lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale), \
-            # 'angled':    lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, angle), \
-            # 'angled_nb': lambda X, n_rff, seed: kernels.angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle), \
-            'ort_anti':  lambda X, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(X, n_rff / 2, seed, scale)), \
-            'HD_1':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1), \
-            'HD_2':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2), \
-            'HD_3':      lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3), \
-            'fastfood':  lambda X, n_rff, seed: kernels.fastfood_RFF(X, n_rff, seed, scale)}
+    algos = {}
+    algos['iid'] =           lambda X, n_rff, seed: kernels.iid_gaussian_RFF(X, n_rff, seed, scale)
+    algos['iid_fix_norm'] =  lambda X, n_rff, seed: kernels.iid_fix_norm_RFF(X, n_rff, seed, scale)
+    algos['iid_invnorm'] =   lambda X, n_rff, seed: kernels.iid_invnorm_gaussian_RFF(X, n_rff, seed, scale)
+    algos['ort'] =           lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale)
+    algos['ort_fix_norm'] =  lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale)
+    # algos['iid_anti'] =      lambda X, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(X, n_rff / 2, seed, scale))
+    # algos['ort_anti'] =      lambda X, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(X, n_rff / 2, seed, scale))
+    algos['HD_1'] =          lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1)
+    algos['HD_fix_norm_1'] = lambda X, n_rff, seed: kernels.HD_fix_norm_RFF(X, n_rff, seed, scale, 1)
+    # algos['HD_2'] =        lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2)
+    # algos['HD_3'] =        lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3)
+    algos['fastfood'] =    lambda X, n_rff, seed: kernels.fastfood_RFF(X, n_rff, seed, scale)
+    # for angle in [np.pi/2*0.6, np.pi/2*0.8, np.pi/2*1.2, np.pi/2*1.4]:
+    #     algos['angled_%.3f' % angle] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, angle)
+    #     algos['angled_nb_%.3f' % angle] = lambda X, n_rff, seed: kernels.angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle)
+
     plt.figure(figsize = (8,6))
     results = {}
     for algo_name, feature_handle in algos.items():
@@ -31,22 +36,25 @@ def squared_exponential_kernel():
             results[algo_name][n_rff] = []
             for seed in range(n_seeds):
                 np.random.seed(n_rff * seed)
-                z = np.random.normal(size = (1, dim))
-                true_K = kernels.gaussian_kernel(np.zeros((1, dim)), z, scale)
+                x = np.random.normal(size = (1, dim))
+                y = np.random.normal(size = (1, dim))
+                true_K = kernels.gaussian_kernel(x, y, scale)
                 
-                Phiz = feature_handle(z, n_rff, seed)
-                Phi0 = feature_handle(np.zeros(z.shape), n_rff, seed)
-                est_K = np.real(np.dot(Phiz, np.conj(Phi0.T)))
+                Phix = feature_handle(x, n_rff, seed * n_rff)
+                Phiy = feature_handle(y, n_rff, seed * n_rff)
+                est_K = np.real(np.dot(Phix, np.conj(Phiy.T)))
+
                 results[algo_name][n_rff].append(float(est_K - true_K))
         x = np.array(sorted(results[algo_name].keys()))
         y = np.array([np.mean(np.abs(results[algo_name][k])) for k in x])
-        print algo_name, np.mean(y[-10:])
+        print algo_name, np.mean(y[-10:])#, results[algo_name][x[-1]][-10:]
         # stds = np.array([np.std(results[algo_name][k]) for k in x])
         p = plt.plot(x, y, label = algo_name.replace('_', '\_'))
         # for xval in x:
         #     plt.scatter([xval] * len(results[algo_name][k]), results[algo_name][k])
         # plt.fill_between(x, y - stds, y + stds, color = p[0].get_color(), alpha = 0.05)
-    plt.yscale('log')
+    # plt.yscale('log')
+    plt.ylim(1e-16)
     plt.legend()
     plt.title('Pointwise SE kernel approximation error')
     plt.xlabel('Number of random features')
@@ -63,11 +71,12 @@ def polynomial_kernel():
     exact_feat_dim = comb(dim + degree, dim) + (inhom_term != 0)
     print 'Dimension of exact feature space = %d' % exact_feat_dim
     n_seeds = 1000
-    algos = {'iid':      lambda          X, n_rff, seed: kernels.iid_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term), \
-             'iid_unit': lambda     X, n_rff, seed: kernels.iid_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term), \
-             'ort':      lambda X, n_rff, seed: kernels.ort_polynomial_sp_random_gaussian_features(X, n_rff, seed, degree, inhom_term), \
-             'ort_unit': lambda     X, n_rff, seed: kernels.ort_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term), \
-             'HD_unit':  lambda     X, n_rff, seed:  kernels.HD_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term)}
+    algos = {}
+    algos['iid'] =      lambda X, n_rff, seed:          kernels.iid_polynomial_sp_random_features(X, n_rff, seed, degree, inhom_term)
+    algos['iid_unit'] = lambda X, n_rff, seed:     kernels.iid_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term)
+    algos['ort'] =      lambda X, n_rff, seed: kernels.ort_polynomial_sp_random_gaussian_features(X, n_rff, seed, degree, inhom_term)
+    algos['ort_unit'] = lambda X, n_rff, seed:     kernels.ort_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term)
+    algos['HD_unit'] =  lambda X, n_rff, seed:      kernels.HD_polynomial_sp_random_unit_features(X, n_rff, seed, degree, inhom_term)
     plt.figure(figsize = (8,6))
     results = {}
     for algo_name, feature_handle in algos.items():
