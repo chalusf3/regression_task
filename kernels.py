@@ -31,6 +31,12 @@ shared utility functions to convert scalar products with unit frequencies into R
 def make_antithetic(feats):
     return np.concatenate([feats, np.conj(feats)], axis = 1) / np.sqrt(2)
 
+def RFF_from_full_prod(prods):
+    # prods contains inner products of data vectors with correctly scaled uniform directions
+    n_rff = prods.shape[1]
+    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+    return RFF
+
 def RFF_from_prod_iid_gaussian_norm(prods, dim):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
     
@@ -38,18 +44,17 @@ def RFF_from_prod_iid_gaussian_norm(prods, dim):
     
     norms = np.sqrt(np.random.chisquare(df = dim, size = n_rff))
     prods *= norms
-    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
-    
+    RFF = RFF_from_full_prod(prods)
     return RFF
 
-def RFF_from_prod_fixed_norm(prods, dim):
+def RFF_from_prod_fix_norm(prods, dim):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
 
     n_rff = prods.shape[1]
 
     norm = np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
     prods *= norm
-    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+    RFF = RFF_from_full_prod(prods)
     return RFF
 
 def RFF_from_prod_inv_gaussian_norm(prods, dim):
@@ -62,7 +67,7 @@ def RFF_from_prod_inv_gaussian_norm(prods, dim):
     inv_norms = np.sqrt(sp_stats.chi2.ppf(1-sp_stats.chi2.cdf(np.square(norms), dim), dim))
     prods *= np.concatenate([norms, inv_norms])
     
-    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
+    RFF = RFF_from_full_prod(prods)
 
     return RFF
 
@@ -73,33 +78,38 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     # returns the matrix (exp(j<omega_{1}, X>), ..., exp(j<omega_{n_rff}, X>) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
+    X /= scale
     omega = np.random.normal(size = (X.shape[1], n_rff)) # random frequencies in columns
-    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    PhiX = RFF_from_full_prod(np.dot(X, omega))
     return PhiX
 
 def iid_fix_norm_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
     dim = X.shape[1]
+    X /= scale
     omega = np.random.normal(size = (X.shape[1], n_rff))
     omega = omega / np.linalg.norm(omega, axis = 0)
-    omega *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
-    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    # omega *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    # PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    PhiX = RFF_from_prod_fix_norm(np.dot(X, omega), dim)
     return PhiX
 
 def iid_invnorm_gaussian_RFF(X, n_rff, seed, scale):
     # returns the matrix (exp(j<omega_{1}, X>), ..., exp(j<omega_{n_rff}, X>) / sqrt(n_rff)
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
+    dim = X.shape[1]
+    X /= scale
     omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff)) # random frequencies
-    omega /= np.linalg.norm(omega, axis = 0)
-    prods = np.dot(X, omega) / scale
-    # prods = np.concatenate([prods[:, 0:n_rff/2], -prods[:, 0:n_rff/2]], axis = 1)
-    PhiX = inv_norm_from_dir(prods, X.shape[1])
-    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    omega /= np.linalg.norm(omega, axis = 0) # unit length
+    prods = np.dot(X, omega)
+    PhiX = RFF_from_prod_inv_gaussian_norm(prods, dim)
     return PhiX
+
 
 """
 attempt at pairing frequencies so that we get a factor of e^{+- ipi} in the next feature
+"""
 """
 def approx_antithetic_RFF(X, n_rff, seed, scale, main_axis):
     # main_axis given as a row (1, dim) vector
@@ -115,13 +125,14 @@ def approx_antithetic_RFF(X, n_rff, seed, scale, main_axis):
 
     PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
     return PhiX
+"""
 
 """
 random Fourier features stack iid orthogonal
 """
-def unif_ort(dim): 
-    # generates a uniform orthonormal matrix using standard scipy method (slower)
-    return sp_stats.ortho_group.rvs(dim = dim)
+# def unif_ort(dim): # SLOW, DO NOT USE
+#     # generates a uniform orthonormal matrix using standard scipy method (slower)
+#     return sp_stats.ortho_group.rvs(dim = dim)
 
 def unif_ort_QR(dim): 
     # generates a uniform orthonormal matrix using QR decomposition of a random gaussian matrix (faster)
@@ -140,38 +151,43 @@ def stacked_unif_ort(shape):
 # A = stacked_unif_ort((3, 7))
 # print np.round(np.dot(A.T, A), decimals = 2)
 
-def unif_ort_gaussian(shape): 
-    # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each marginally gaussian (the columns are the sampled frequencies)
-    G = stacked_unif_ort(shape)
-    dim = shape[0]
-    norms = np.sqrt(np.random.chisquare(df = dim, size = (1, shape[1])))
+# def unif_ort_gaussian(shape): 
+#     # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each marginally gaussian (the columns are the sampled frequencies)
+#     G = stacked_unif_ort(shape)
+#     dim = shape[0]
+#     norms = np.sqrt(np.random.chisquare(df = dim, size = (1, shape[1])))
     
-    G = np.multiply(norms, G)
-    return G
+#     G = np.multiply(norms, G)
+#     return G
 # unif_ort_gaussian((3, 2))
 
-def unif_ort_fix_norm(shape):
-    # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each with norm equal to the mean norm
-    G = stacked_unif_ort(shape)
-    dim = shape[0]
-    G *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
-    return G
+# def unif_ort_fix_norm(shape):
+#     # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each with norm equal to the mean norm
+#     G = stacked_unif_ort(shape)
+#     dim = shape[0]
+#     G *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+#     return G
 
 def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
-    omega = unif_ort_gaussian((X.shape[1], n_rff)) / scale
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    X /= scale
+    dim = X.shape[1]
+    omega = stacked_unif_ort((dim, n_rff))
+    return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega), dim)
 
 def ort_fix_norm_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
-    omega = unif_ort_fix_norm((X.shape[1], n_rff)) / scale
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    X /= scale
+    dim = X.shape[1]
+    omega = stacked_unif_ort((dim, n_rff))
+    return RFF_from_prod_fix_norm(np.dot(X, omega), dim)
+    # omega = unif_ort_fix_norm((X.shape[1], n_rff)) / scale
+    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    # return PhiX
 
 """
 Generate Fourier features with a certain angle between all vectors (if dimension allows it) 
