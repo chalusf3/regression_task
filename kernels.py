@@ -89,8 +89,6 @@ def iid_fix_norm_RFF(X, n_rff, seed, scale):
     X /= scale
     omega = np.random.normal(size = (X.shape[1], n_rff))
     omega = omega / np.linalg.norm(omega, axis = 0)
-    # omega *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
-    # PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
     PhiX = RFF_from_prod_fix_norm(np.dot(X, omega), dim)
     return PhiX
 
@@ -130,10 +128,6 @@ def approx_antithetic_RFF(X, n_rff, seed, scale, main_axis):
 """
 random Fourier features stack iid orthogonal
 """
-# def unif_ort(dim): # SLOW, DO NOT USE
-#     # generates a uniform orthonormal matrix using standard scipy method (slower)
-#     return sp_stats.ortho_group.rvs(dim = dim)
-
 def unif_ort_QR(dim): 
     # generates a uniform orthonormal matrix using QR decomposition of a random gaussian matrix (faster)
     G_ort, R = np.linalg.qr(np.random.normal(size = (dim, dim)))
@@ -144,29 +138,11 @@ def stacked_unif_ort(shape):
     # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
     G = [unif_ort_QR(shape[0]) for _ in range(int(np.ceil(float(shape[1]) / shape[0])))]
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
-    # G = G[:, :shape[1]]
-    idx = np.random.choice(G.shape[1], size = shape[1], replace = False)
+    idx = np.random.choice(G.shape[1], size = shape[1], replace = False) # idx = range(shape[1])
     G = G[:, idx]
     return G
 # A = stacked_unif_ort((3, 7))
 # print np.round(np.dot(A.T, A), decimals = 2)
-
-# def unif_ort_gaussian(shape): 
-#     # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each marginally gaussian (the columns are the sampled frequencies)
-#     G = stacked_unif_ort(shape)
-#     dim = shape[0]
-#     norms = np.sqrt(np.random.chisquare(df = dim, size = (1, shape[1])))
-    
-#     G = np.multiply(norms, G)
-#     return G
-# unif_ort_gaussian((3, 2))
-
-# def unif_ort_fix_norm(shape):
-#     # generates a matrix with shape[1] orthogonal columns of dimension shape[0], each with norm equal to the mean norm
-#     G = stacked_unif_ort(shape)
-#     dim = shape[0]
-#     G *= np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
-#     return G
 
 def ort_gaussian_RFF(X, n_rff, seed, scale):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
@@ -185,9 +161,6 @@ def ort_fix_norm_RFF(X, n_rff, seed, scale):
     dim = X.shape[1]
     omega = stacked_unif_ort((dim, n_rff))
     return RFF_from_prod_fix_norm(np.dot(X, omega), dim)
-    # omega = unif_ort_fix_norm((X.shape[1], n_rff)) / scale
-    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    # return PhiX
 
 """
 Generate Fourier features with a certain angle between all vectors (if dimension allows it) 
@@ -259,15 +232,20 @@ def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
     # angle is between 0 and pi 
     # enforce that the random fourier frequencies satisfy: angle between X_i and X_{i+j} is equal to angle if possible. else stack such vectors
     np.random.seed(seed)
-    
+    X /= scale
+    dim = X.shape[1]
+
     omega = [angled_block(X.shape[1], np.cos(angle)) for _ in range(int(np.ceil(float(n_rff) / X.shape[1])))]
     omega = np.concatenate(omega, axis = 1)
-    omega = omega[:, :n_rff]
-    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
+    idx = np.random.choice(omega.shape[1], size = n_rff, replace = False) # idx = range(shape[1])
+    omega = omega[:, idx]
+    return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega), dim)
+    # omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
 
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    # return PhiX
 
+"""
 def sample_theta(m):
     # samples one theta with density = sin(theta)^(m-2) dtheta (e.g. the density of the angle between two random uniform vectors)
     # use acceptance-rejection sampling with a uniform as dominating density
@@ -283,6 +261,7 @@ def sample_theta(m):
 # import matplotlib.pyplot as plt
 # plt.hist([sample_theta(3) for _ in range(1000)], 30)
 # plt.show()
+"""
 
 def spherical_coord(angles):
     v = np.ones(angles.shape[0]+1)
@@ -318,12 +297,16 @@ def angled_neighbours(dim, n_samples, angle):
 def angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle):
     np.random.seed(seed)
     
-    omega = angled_neighbours(X.shape[1], n_rff, angle)
-    norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff)))
-    omega = np.multiply(norms, omega / scale)
+    X /= scale
+    dim = X.shape[1]
 
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    omega = angled_neighbours(X.shape[1], n_rff, angle)
+    return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega), dim)
+    # norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff)))
+    # omega = np.multiply(norms, omega / scale)
+
+    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    # return PhiX
 
 """
 greedy approach to generate samples by taking directions as far from each other as possible
@@ -383,11 +366,14 @@ def greedy_directions(dim, n_rff):
 def greedy_dir_gaussian_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
     
-    omega = np.dot(unif_ort_QR(X.shape[1]), greedy_directions(X.shape[1], n_rff))
-    omega = omega / scale
+    X /= scale
 
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    omega = np.dot(unif_ort_QR(X.shape[1]), greedy_directions(X.shape[1], n_rff)) # randomize the directions generated greedily
+    # omega = omega / scale
+    return RFF_from_full_prod(np.dot(X, omega))
+
+    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
+    # return PhiX
 
 """
 Givens approach to generate samples with a certain angles
@@ -499,6 +485,7 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     return K 
 # print stacked_hadamard_rademacher(np.eye(7), 3, 1)
 
+"""
 def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
 
@@ -507,7 +494,9 @@ def hadamard_rademacher_product_scale_chi(X, n_rff, k):
     K = norms * K
     
     return K
+"""
 
+"""
 def hadamard_rademacher_product_scale_fix_norm(X, n_rff, k):
     # Returns the product of x with orthogonal vectors, each having an approximately Gaussian marginal
 
@@ -517,18 +506,28 @@ def hadamard_rademacher_product_scale_fix_norm(X, n_rff, k):
     K *= norm
     
     return K
+"""
 
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
-    K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
-    PhiX = np.exp(1j * K) / np.sqrt(n_rff)
-    return PhiX
+    X /= scale
+    dim = X.shape[1]
+    prods = stacked_hadamard_rademacher(X, n_rff, k)
+    return RFF_from_prod_iid_gaussian_norm(prods, dim)
+    # K = hadamard_rademacher_product_scale_chi(X, n_rff, k) / scale
+    # PhiX = np.exp(1j * K) / np.sqrt(n_rff)
+    # return PhiX
 
 def HD_fix_norm_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
-    K = hadamard_rademacher_product_scale_fix_norm(X, n_rff, k) / scale
-    PhiX = np.exp(1j * K) / np.sqrt(n_rff)
-    return PhiX
+    X /= scale
+    dim = X.shape[1]
+    prods = stacked_hadamard_rademacher(X, n_rff, k)
+    return RFF_from_prod_fix_norm(prods, dim)
+    # np.random.seed(seed)
+    # K = hadamard_rademacher_product_scale_fix_norm(X, n_rff, k) / scale
+    # PhiX = np.exp(1j * K) / np.sqrt(n_rff)
+    # return PhiX
 
 
 """
