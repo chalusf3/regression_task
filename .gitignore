@@ -1,3 +1,4 @@
+*.eps
 output/*
 trash*
 .DS_Store
@@ -7,8 +8,6 @@ trash*
 __pycache__/
 *.py[cod]
 *$py.class
-disc_40_50000_40.eps
-._disc_40_50000_40.eps
 
 # C extensions
 *.so
