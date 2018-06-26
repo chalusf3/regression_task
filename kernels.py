@@ -104,27 +104,6 @@ def iid_invnorm_gaussian_RFF(X, n_rff, seed, scale):
     PhiX = RFF_from_prod_inv_gaussian_norm(prods, dim)
     return PhiX
 
-
-"""
-attempt at pairing frequencies so that we get a factor of e^{+- ipi} in the next feature
-"""
-"""
-def approx_antithetic_RFF(X, n_rff, seed, scale, main_axis):
-    # main_axis given as a row (1, dim) vector
-    np.random.seed(seed)
-    omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff / 2)) # each column is a random frequency
-    omega = omega / np.linalg.norm(omega, axis = 0)
-    omega2 = omega - 2 * np.dot(main_axis, omega) * main_axis[:, np.newaxis]
-    
-    norms = np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff / 2)))
-    omega *= norms
-    omega2 *= norms
-    omega = np.concatenate([omega, omega2], axis = 1)
-
-    PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
-    return PhiX
-"""
-
 """
 random Fourier features stack iid orthogonal
 """

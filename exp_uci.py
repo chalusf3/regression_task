@@ -133,33 +133,34 @@ def kernel_error(data_name, X_train, noise_var, scale):
 
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     n_seeds = 10
-    algos = {'iid':      lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
-            'iid_anti':  lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
-            'ort':       lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale), \
-            'ort_anti':  lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff, s, scale)), \
-            'HD_1':      lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1), \
-            'HD_2':      lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2), \
-            'HD_3':      lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3), \
-            'angled_0.5':lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.5), \
-            'angled_0.75':lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.75), \
-            'angled_1.0':lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.0), \
-            'angled_1.25':lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.25), \
-            'angled_2.1':lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 2.1), \
-            'greedy':    lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale), \
-            'greedy_dir':lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale), \
-            'fastfood':  lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale), \
-            'iid_polyn': lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term), \
-            'ort_polyn': lambda a, s:   kernels.ort_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term), \
-            'HD_polyn':  lambda a, s:    kernels.HD_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)}
-            # 'iid_polynomial_sp': lambda a, s:   kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term), \
-            # 'iid_exponential_sp': lambda a, s: kernels.iid_exponential_sp_random_features(a, n_rff, s, scale), \
-            # 'approx_antithetic_RFF':   lambda a, s:                    kernels.approx_antithetic_RFF(a, n_rff, s, scale, main_axis(X))}
+    algos = {}
+    algos['iid'] =                   lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale)
+    algos['ort'] =                   lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale)
+    algos['ort_fix_norm'] =          lambda a, s:                         kernels.ort_fix_norm_RFF(a, n_rff, s, scale)
+    # algos['iid_anti'] =              lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff / 2, s, scale))
+    # algos['ort_anti'] =              lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff / 2, s, scale))
+    algos['HD_1'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1)
+    # algos['HD_2'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2)
+    # algos['HD_3'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3)
+    # algos['angled_0.5'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.5)
+    # algos['angled_0.75'] =           lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.75)
+    # algos['angled_1.0'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.0)
+    # algos['angled_1.25'] =           lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.25)
+    # algos['angled_2.1'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 2.1)
+    # algos['greedy'] =                lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale)
+    # algos['greedy_dir'] =            lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)
+    algos['fastfood'] =              lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)
+    # algos['iid_polyn'] =             lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
+    # algos['ort_polyn'] =             lambda a, s:   kernels.ort_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
+    # algos['HD_polyn'] =              lambda a, s:    kernels.HD_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
+    # algos['iid_polynomial_sp'] =     lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
+    # algos['iid_exponential_sp'] =    lambda a, s:       kernels.iid_exponential_sp_random_features(a, n_rff, s, scale)
 
-    test_algos = ['fastfood'] # algos.keys()
+    test_algos = algos.keys()
     algos = {k: algos[k] for k in test_algos}
 
-    # n_rffs = [4,8,12,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,156]
-    n_rffs = [4,8,16,24,40,56,88,104,128,156] # for squared exponential kernels
+    n_rffs = [4,6,8,10,12,14,16,18,20,22,24,28,32,36,40,44,48,56,64,72,80,88,96]
+    # n_rffs = [4,8,16,24,40,56,88,104,128,156] # for squared exponential kernels
     # n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
@@ -226,7 +227,8 @@ if __name__ == '__main__':
     # X_cv =    10 % of all data
 
     noise_var = 1.0
-    scale = 8.0
+    # scale = 8.0
+    scale = 13.0
     degree = 3
     inhom_term = 1.0
     n_rff = 300
@@ -234,14 +236,14 @@ if __name__ == '__main__':
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
 
-    #regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
     regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'angled_0.5', 'angled_0.75', 'angled_1.25', 'angled_1.0', 'angled_2.1'])
+    plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'ort_fix_norm', 'HD_1'])
     # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'fastfood'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'approx_antithetic_RFF'])
     # plot_regression_errors(data_name, ['exact_gauss', 'exact_poly_sp', 'iid_polyn', 'ort_polyn', 'HD_polyn'])
-    plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
+    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
     # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'exact_exp_sp', 'exact_poly_sp', 'iid_exponential_sp', 'iid_polynomial_sp'])
     # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'greedy', 'greedy_dir'])
 
