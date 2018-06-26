@@ -215,7 +215,7 @@ def plot_regression_errors(data_name, algo_names):
     plt.legend()
     plt.show()
 
-if __name__ == '__main__':
+def main():
     np.random.seed(3)
     data_name = ['wine', 'airq'][1]
     if data_name == 'wine':
@@ -284,3 +284,6 @@ if __name__ == '__main__':
     #                                             lambda a: kernels.fastfood_RFF(a, n_rff, seed, scale))
     # y_cv_fit_feature = np.real(y_cv_fit_feature)
     # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
+
+if __name__ == '__main__':
+    main()

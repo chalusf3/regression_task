@@ -90,10 +90,9 @@ def iid_invnorm_gaussian_RFF(X, n_rff, seed, scale):
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
     dim = X.shape[1]
-    omega = np.random.normal(loc = 0.0, scale = 1.0, size = (X.shape[1], n_rff)) # random frequencies
+    omega = np.random.normal(size = (X.shape[1], n_rff)) # random frequencies
     omega /= np.linalg.norm(omega, axis = 0) # unit length
-    prods = np.dot(X, omega)
-    PhiX = RFF_from_prod_inv_gaussian_norm(prods / scale, dim)
+    PhiX = RFF_from_prod_inv_gaussian_norm(np.dot(X, omega) / scale, dim)
     return PhiX
 
 """
