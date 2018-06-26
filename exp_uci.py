@@ -136,10 +136,12 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     algos = {}
     algos['iid'] =                   lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale)
     algos['ort'] =                   lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale)
+    algos['iid_fix_norm'] =          lambda a, s:                         kernels.iid_fix_norm_RFF(a, n_rff, s, scale)
     algos['ort_fix_norm'] =          lambda a, s:                         kernels.ort_fix_norm_RFF(a, n_rff, s, scale)
     # algos['iid_anti'] =              lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff / 2, s, scale))
     # algos['ort_anti'] =              lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff / 2, s, scale))
     algos['HD_1'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1)
+    algos['HD_1_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 1)
     # algos['HD_2'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2)
     # algos['HD_3'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3)
     # algos['angled_0.5'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.5)
@@ -150,6 +152,7 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     # algos['greedy'] =                lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale)
     # algos['greedy_dir'] =            lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)
     algos['fastfood'] =              lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)
+    
     # algos['iid_polyn'] =             lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
     # algos['ort_polyn'] =             lambda a, s:   kernels.ort_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
     # algos['HD_polyn'] =              lambda a, s:    kernels.HD_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
@@ -171,6 +174,7 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
             print '{} {} \t{} \t{}'.format(algo_name, n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff])))
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
+    return algos.keys()
 
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
     n_rffs = [4,2048]
@@ -238,15 +242,10 @@ if __name__ == '__main__':
 
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
-    regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'angled_0.5', 'angled_0.75', 'angled_1.25', 'angled_1.0', 'angled_2.1'])
-    plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'ort_fix_norm', 'HD_1'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'iid_anti', 'ort', 'ort_anti', 'HD_1', 'HD_2', 'HD_3', 'fastfood'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'exact_poly_sp', 'iid_polyn', 'ort_polyn', 'HD_polyn'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'ort', 'HD_1', 'HD_3', 'fastfood'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'exact_exp_sp', 'exact_poly_sp', 'iid_exponential_sp', 'iid_polynomial_sp'])
-    # plot_regression_errors(data_name, ['exact_gauss', 'iid', 'greedy', 'greedy_dir'])
-
+    keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    
+    plot_regression_errors(data_name, ['exact_gauss'] + keys)
+    
     # # Fit a GP with random iid features 
     # print 'Start'
     # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
