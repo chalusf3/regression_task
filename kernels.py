@@ -559,26 +559,24 @@ def fastfood_RFF(X, n_rff, seed, scale):
     """ X must have shape (n_vec, dimension) (e.g. samples are ROWS) """
     np.random.seed(seed)
 
+    X /= scale
     # Embed rows of X in dimension 2^k = HD_dim
     original_dimension = X.shape[1] # dimension of input feature vector
     X = embed_in_power_of_two(X)
     HD_dim = X.shape[1]
-    # HD_dim = 2 ** (int(np.ceil(np.log(X.shape[1]) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
-    # X = np.pad(X, ((0, 0), (0, HD_dim - X.shape[1])), 'constant', constant_values = ((np.nan, np.nan), (np.nan, 0)))
 
-    K = np.concatenate([fastfood_prod(X.T) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 0).T
-    
-    # Then we discard some columns from the last block
-    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
-    idx = np.random.choice(HD_dim, size = n_rff - idx_last_block, replace = False) # those indices of the last block we'll keep
-    
-    K = np.concatenate([K[:, 0:idx_last_block], K[:, idx_last_block + idx]], axis = 1)
-    
-    K = K / scale * np.sqrt(HD_dim) / np.sqrt(original_dimension)
+    prods = np.concatenate([fastfood_prod(X.T) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 0).T
 
-    return np.exp(1j * K) / np.sqrt(n_rff)
+    # subsample to get the right number of features 
+    idx = np.random.choice(prods.shape[1], size = n_rff, replace = False)
+    prods = prods[:, idx]
+
+    prods *= np.sqrt(HD_dim) / np.sqrt(original_dimension)
+
+    return RFF_from_full_prod(prods)
+
 """
-polynomial kernel using unit length random projections
+POLYNOMIAL KERNELS using unit length random projections
 """
 def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0):
     """
@@ -671,57 +669,11 @@ def HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_ter
     
     return PhiX
 
-# """
-# scalar product based kernels
-# """
-# def iid_scalar_prod_random_features(X, n_features, mclaurin_coeff):
-#     """
-#     mclaurin_coeff must be function handle of an integer n>=0
-#     """
-#     p = 0.5
-#     random_features = np.zeros((X.shape[0], n_features))
-#     N_mclaurin = np.random.geometric(p = p, size = n_features) - 1 # point until which we compute the mclaurin expansion
-#     for idx in range(n_features):
-#         if N_mclaurin[idx] > 0:
-#             Omega = -1 + 2 * np.random.binomial(1, 0.5, size = (X.shape[1], N_mclaurin[idx]))
-#             random_features[:, idx] = np.squeeze(np.prod(np.dot(X, Omega), axis = 1))
-#         else:
-#             random_features[:, idx] = np.ones(shape = X.shape[0])
-#         
-#         random_features[:, idx] *= np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) 
-#     return random_features / np.sqrt(n_features)
-# 
-# def HD_scalar_prod_random_features(X, n_features, mclaurin_coeff):
-#     p = 0.5
-#     random_features = np.zeros((X.shape[0], n_features))
-#     N_mclaurin = np.random.geometric(p = p, size = n_features) - 1# point until which we compute the mclaurin expansion
-#     for idx in range(n_features):
-#         if N_mclaurin[idx] > 0:
-#             random_features[:, idx] = np.prod(X.shape[1] * stacked_hadamard_rademacher(X, N_mclaurin[idx], 1), axis = 1)
-#         else:
-#             random_features[:, idx] = np.ones(shape = (X.shape[0], 1))
-#         random_features[:, idx] = np.sqrt(mclaurin_coeff(N_mclaurin[idx]) * p**(N_mclaurin[idx] + 1)) * random_features[:, idx]
-#     return random_features / np.sqrt(n_features)
-
 """
 iid polynomial kernel
 """
 def polynomial_sp_kernel(X, loc, degree, inhom_term):
     return np.power(np.dot(X, loc.T) + inhom_term, degree)
-
-# def mclaurin_coeff_generic(k, degree, inhom_term):
-#     if k > degree: 
-#         return 0
-#     else:
-#         return inhom_term ** (degree - k) * sp_spec.comb(degree, k, exact = False)
-
-# def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term):    
-#     np.random.seed(seed)
-#     return iid_scalar_prod_random_features(X, n_features, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
-
-# def HD_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term):
-#     np.random.seed(seed)
-#     return HD_scalar_prod_random_features(X, n_features, lambda k: mclaurin_coeff_generic(k, degree, inhom_term))
 
 """
 exponential kernel
@@ -729,8 +681,3 @@ exponential kernel
 def exponential_sp_kernel(X, loc, scale):
     return np.exp(np.dot(X, loc.T) / scale ** 2)
 
-# def iid_exponential_sp_random_features(X, n_rff, seed, scale):
-#     def mclaurin_coeff(k):
-#         return 1.0 / math.factorial(k) / scale ** (2 * k)
-#     np.random.seed(seed)
-#     return iid_scalar_prod_random_features(X, n_rff, mclaurin_coeff)
