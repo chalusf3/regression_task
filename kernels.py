@@ -445,22 +445,22 @@ def fastfood_prod(x):
     """
     d = x.shape[0]
     B = -1.0 + 2.0 * np.random.binomial(1, 0.5, size = (d, 1))
-    P = np.arange(d)
-    np.random.shuffle(P)
+    Pi = np.arange(d)
+    np.random.shuffle(Pi)
     G = np.random.normal(size = (d, 1))
     S = np.sqrt(np.random.chisquare(df = d, size = (d, 1))) / np.linalg.norm(G)
     
-    K = np.multiply(B, x) # B * X
-    K = hadamard_product(K) # H * B*X
-    K = K[P, :] # P * H*B*K
-    K = np.multiply(G, K) # G * P*H*B*K
-    K = hadamard_product(K) # H * G*P*H*B*K
-    K = np.multiply(S, K) # S * H*G*P*H*B*K
+    K = hadamard_product(np.multiply(B, x)) # H * B * X
+    K = np.multiply(G, K[Pi, :]) # G * Pi * H*B*K
+    K = hadamard_product(K) # H * G*Pi*H*B*K
+    K = np.multiply(S, K) # S * H*G*Pi*H*B*K
     K = K / np.sqrt(d) # TODO: check that divide by sqrt(HD_dim) and not sqrt(original_dimension)?
     return K
 
 def fastfood_RFF(X, n_rff, seed, scale):
-    """ X must have shape (n_vec, dimension) (e.g. samples are ROWS) """
+    """ 
+    X must have shape (n_vec, dimension) (e.g. samples are ROWS) 
+    """
     np.random.seed(seed)
 
     # Embed rows of X in dimension 2^k = HD_dim
@@ -474,7 +474,7 @@ def fastfood_RFF(X, n_rff, seed, scale):
     idx = np.random.choice(prods.shape[1], size = n_rff, replace = False)
     prods = prods[:, idx]
 
-    # prods *= np.sqrt(HD_dim) / np.sqrt(original_dimension)
+    # prods *= np.sqrt(float(HD_dim) / original_dimension)
 
     return RFF_from_full_prod(prods / scale)
 
@@ -498,7 +498,6 @@ def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 
     return PhiX
 # Phi = iid_polynomial_sp_random_features(np.eye(4), 10000, 0, 1, inhom_term = 0)
 # print np.dot(Phi, Phi.T)
-
 
 def iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
     """

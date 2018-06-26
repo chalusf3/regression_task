@@ -76,14 +76,9 @@ def split_data(X, y, ratio = 0.8):
     y_test = y[train_count:]
     return X_train, y_train, X_test, y_test
 
-# def whiten_data(X):
-#     means = np.mean(X, axis = 0)
-#     stds = np.std(X, axis = 0)
-#     X = (X - means) / stds
-#     return X, means, stds
 def whiten_data(X):
     means = np.mean(X, axis = 0)
-    #stds = np.std(X, axis = 0)
+    # stds = np.std(X, axis = 0)
     cov_mat = np.cov(X.T)
     X = (X - means)
     X = np.linalg.solve(sp_la.sqrtm(cov_mat), X.T).T
@@ -226,17 +221,15 @@ def main():
     X = whiten_data(X)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
     X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.8)
-    # X_train = 70 % of all data
+    # X_train = 64 % of all data
     # X_test =  20 % of all data
-    # X_cv =    10 % of all data
+    # X_cv =    16 % of all data
 
     noise_var = 1.0
     # scale = 8.0
-    scale = 13.0
+    scale = 16.0
     degree = 3
     inhom_term = 1.0
-    n_rff = 300
-    seed = 0
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
 
@@ -245,45 +238,6 @@ def main():
     keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
-    
-    # # Fit a GP with random iid features 
-    # print 'Start'
-    # y_cv_gp_feature, _ = gpr.posterior_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                                     lambda a: kernels.ort_gaussian_RFF(a, n_rff, seed, scale))
-    # print 'Done'
-    # print np.linalg.norm(y_cv - y_cv_gp_feature) / y_cv.shape[0]
-    
-    # # Fit a GP with kernel 
-    # print 'Start'
-    # y_cv_gp_kernel, _ = gpr.posterior_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
-    # print 'Done'
-    # print np.linalg.norm(y_cv - y_cv_gp_kernel) / y_cv.shape[0]
-    # print np.linalg.norm(y_cv_gp_kernel - y_cv_gp_feature) / y_cv.shape[0]
-
-    # # Fit with kernel trick
-    # print 'Start'
-    # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
-    # # y_cv_fit_kernel = krr.fit_from_kernel_gen(X_train, y_train, X_cv, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    # print 'Done'
-    # print np.linalg.norm(y_cv - y_cv_fit_kernel) / y_cv.shape[0]
-
-    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.iid_polynomial_sp_random_features(a, n_rff, seed, degree, inhom_term))
-    # y_cv_fit_feature = np.real(y_cv_fit_feature)
-    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
-    
-    # y_test_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, 
-    #                                             lambda a: kernels.iid_polynomial_sp_random_features(a, n_rff, seed, degree, inhom_term))
-    # print np.linalg.norm(y_test - y_test_fit_feature) / y_test.shape[0]
-
-    # y_test_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, 
-    #                                             lambda a: kernels.iid_polynomial_sp_random_features(a, n_rff, seed, degree, inhom_term))
-    # print np.linalg.norm(y_test - y_test_fit_feature) / y_test.shape[0]
-
-    # y_cv_fit_feature = krr.fit_from_feature_gen(X_train, y_train, X_cv, noise_var, 
-    #                                             lambda a: kernels.fastfood_RFF(a, n_rff, seed, scale))
-    # y_cv_fit_feature = np.real(y_cv_fit_feature)
-    # print np.linalg.norm(y_cv - y_cv_fit_feature) / y_cv.shape[0]
 
 if __name__ == '__main__':
     main()
