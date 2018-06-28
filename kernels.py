@@ -433,7 +433,22 @@ def HD_fix_norm_RFF(X, n_rff, seed, scale, k):
     dim = X.shape[1]
     prods = stacked_hadamard_rademacher(X / scale, n_rff, k)
     return RFF_from_prod_fix_norm(prods, dim)
+
+def HD_fix_norm_subsample_RFF(X, n_rff, seed, scale, k):
+    np.random.seed(seed)
+    dim = X.shape[1]
+    low_HD_dim = embed_in_power_of_two(X).shape[1] / 2
+    prods = [hadamard_rademacher_product(X[:, np.random.choice(dim, low_HD_dim, replace = False)].T / scale, k).T for _ in range(1 + n_rff / low_HD_dim)]
+    prods = np.concatenate(prods, axis = 1)
     
+    idx = np.random.choice(prods.shape[1], size = n_rff, replace = False)
+    prods = prods[:, idx]
+    
+    return RFF_from_prod_fix_norm(prods, dim)
+# A = np.concatenate([hadamard_rademacher_product(np.eye(9)[:, np.random.choice(9, 4, replace = False)].T, 1).T for _ in range(13 / 4)], axis = 1)
+# print A * np.sqrt(8)
+# print np.round(np.dot(A.T, A), 2)
+
 """
 fastfood
 """
