@@ -12,7 +12,7 @@ def gaussian_kernel(X, loc, scale):
     # returns the gram matrix K_ij = exp(-||X_i - loc_j||^2/(2*scale^2))
     # X is given with rows as sample vectors (size n_samples x dimension_samples), same for loc
     K = np.tile(np.square(np.linalg.norm(X, axis = 1)), [loc.shape[0], 1]).T + np.tile(np.square(np.linalg.norm(loc, axis = 1)), [X.shape[0], 1]) - 2 * np.dot(X, loc.T)
-    K = np.exp(- K / 2 / scale**2)
+    K = np.exp(- K / 2.0 / scale**2)
     return K
 # X = np.random.normal(size = (5,6))
 # loc = np.random.normal(size = (3, 6))
@@ -27,30 +27,29 @@ def gaussian_kernel_gram(X, scale):
 """
 shared utility functions to convert scalar products with unit frequencies into RFF vectors
 """
-
 def make_antithetic(feats):
     return np.concatenate([feats, np.conj(feats)], axis = 1) / np.sqrt(2)
 
 def RFF_from_full_prod(prods):
     # prods contains inner products of data vectors with correctly scaled uniform directions
     n_rff = prods.shape[1]
-    RFF = np.exp(1j * prods) / np.sqrt(n_rff)
-    return RFF
+    RFF = np.concatenate([np.cos(prods), np.sin(prods)], axis = 1) # np.exp(1j * prods)
+    return RFF / np.sqrt(n_rff)
 
 def RFF_from_prod_iid_gaussian_norm(prods, dim):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
     n_rff = prods.shape[1]
     norms = np.sqrt(np.random.chisquare(df = dim, size = n_rff))
-    prods = np.multiply(prods, norms)
-    RFF = RFF_from_full_prod(prods)
-    return RFF
+    prods = np.multiply(prods, norms[np.newaxis, :])
+
+    return RFF_from_full_prod(prods)
 
 def RFF_from_prod_fix_norm(prods, dim):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
-    norm = np.sqrt(2) * sp_spec.gamma((dim+1.0)/2.0) / sp_spec.gamma(dim/2.0)
+    norm = np.sqrt(2) * sp_spec.gamma((dim + 1.0) / 2.0) / sp_spec.gamma(dim / 2.0)
     prods *= norm
-    RFF = RFF_from_full_prod(prods)
-    return RFF
+
+    return RFF_from_full_prod(prods)
 
 def RFF_from_prod_inv_gaussian_norm(prods, dim):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
@@ -62,9 +61,7 @@ def RFF_from_prod_inv_gaussian_norm(prods, dim):
     inv_norms = np.sqrt(sp_stats.chi2.ppf(1-sp_stats.chi2.cdf(np.square(norms), dim), dim))
     prods = np.multiply(prods, np.concatenate([norms, inv_norms]))
 
-    RFF = RFF_from_full_prod(prods)
-
-    return RFF
+    return RFF_from_full_prod(prods)
 
 """
 random Fourier features iid
@@ -75,6 +72,7 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
     omega = np.random.normal(size = (X.shape[1], n_rff)) # random frequencies in columns
     PhiX = RFF_from_full_prod(np.dot(X, omega) / scale)
+    # PhiX = RFF_from_prod_iid_gaussian_norm(np.dot(X, omega / np.linalg.norm(omega, axis = 0)) / scale, X.shape[1]) # just for testing consistency
     return PhiX
 
 def iid_fix_norm_RFF(X, n_rff, seed, scale):
@@ -101,33 +99,67 @@ random Fourier features stack iid orthogonal
 def unif_ort_QR(dim): 
     # generates a uniform orthonormal matrix using QR decomposition of a random gaussian matrix (faster)
     G_ort, R = np.linalg.qr(np.random.normal(size = (dim, dim)))
-    G_ort = np.dot(G_ort, np.diag(np.sign(np.diag(R))))
+    G_ort = np.multiply(G_ort, np.sign(np.diag(R)))
+    # G_ort = sp_stats.ortho_group.rvs(dim) # super slow (really)
     return G_ort
+# d = 6
+# A = np.ones((10000, d))
+# S = np.ones((10000, d-1))
+# for i in range(A.shape[0]):
+#     M = sp_stats.ortho_group.rvs(d)
+#     M = M + 0 * 1j # so that numpy stops casting M as being real
+#     M, _ = np.linalg.eig(M)
+#     A[i] = np.angle(M)
+#     A[i] = np.sort(A[i])
+#     S[i] = np.diff(A[i])
+# import matplotlib.pyplot as plt
+# A = A.flatten()
+# plt.hist(A, 100)
+# plt.show()
+# S = S.flatten()
+# plt.hist(S, 100)
+# plt.show()
 
-def stacked_unif_ort(shape):
+def stacked_unif_ort(shape, subsample_all):
     # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
-    G = [unif_ort_QR(shape[0]) for _ in range(int(np.ceil(float(shape[1]) / shape[0])))]
+    G = [unif_ort_QR(shape[0]) for _ in range(1 + shape[1] / shape[0])] # int(np.ceil(float(shape[1]) / shape[0]))
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
-    idx = np.random.choice(G.shape[1], size = shape[1], replace = False) # idx = range(shape[1])
+    if subsample_all:
+        idx = np.random.choice(G.shape[1], size = shape[1], replace = False) 
+    else:
+        idx_last_block = int(shape[1] / shape[0]) * shape[0] #int(np.floor(float(shape[1]) / shape[0])) * shape[0]
+        idx = range(idx_last_block)
+        if idx_last_block < shape[1]:
+            idx.extend(np.random.choice(np.arange(idx_last_block, G.shape[1]), shape[1] - idx_last_block, replace = False))
+    
     G = G[:, idx]
+    assert(G.shape == shape)
     return G
 # A = stacked_unif_ort((3, 7))
+# print A
 # print np.round(np.dot(A.T, A), decimals = 2)
 
-def ort_gaussian_RFF(X, n_rff, seed, scale):
+def ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     dim = X.shape[1]
-    omega = stacked_unif_ort((dim, n_rff))
+    omega = stacked_unif_ort((dim, n_rff), subsample_all = subsample_all)
+    assert(omega.shape == (dim, n_rff))
     return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim)
+# dirs = stacked_unif_ort((3, 100), False)
+# dirs *= np.sqrt(np.random.chisquare(df = dirs.shape[0], size = dirs.shape[1]))
+# dirs = dirs.flatten()
+# import pylab
+# sp_stats.probplot(dirs, dist="norm", plot=pylab)
+# pylab.show()
 
-def ort_fix_norm_RFF(X, n_rff, seed, scale):
+def ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     dim = X.shape[1]
-    omega = stacked_unif_ort((dim, n_rff))
+    omega = stacked_unif_ort((dim, n_rff), subsample_all = subsample_all)
     return RFF_from_prod_fix_norm(np.dot(X, omega) / scale, dim)
 
 """
@@ -244,7 +276,7 @@ def angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle):
     
     dim = X.shape[1]
 
-    omega = angled_neighbours(X.shape[1], n_rff, angle)
+    omega = angled_neighbours(dim, n_rff, angle)
     return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim)
     
 """
@@ -276,11 +308,13 @@ def greedy_unif_directions(dim, n_rff):
 def greedy_unif_gaussian_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
     
-    omega = np.dot(unif_ort_QR(X.shape[1]), greedy_unif_directions(X.shape[1], n_rff))
-    omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
+    dim = X.shape[1]
 
-    PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    return PhiX
+    omega = np.dot(unif_ort_QR(dim), greedy_unif_directions(dim, n_rff))
+    # omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega)
+
+    # PhiX = np.exp(1j * np.dot(X, omega) / scale) / np.sqrt(n_rff)
+    return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim)
 
 """
 greedy approach to generate samples
@@ -306,11 +340,8 @@ def greedy_dir_gaussian_RFF(X, n_rff, seed, scale):
     np.random.seed(seed)
 
     omega = np.dot(unif_ort_QR(X.shape[1]), greedy_directions(X.shape[1], n_rff)) # randomize the directions generated greedily
-    # omega = omega / scale
-    return RFF_from_full_prod(np.dot(X, omega) / scale)
 
-    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    # return PhiX
+    return RFF_from_full_prod(np.dot(X, omega) / scale)
 
 """
 Givens approach to generate samples with a certain angles
@@ -367,14 +398,14 @@ def hadamard_product_rec(R):
     if R.shape[0] == 1:
         return R
     else:
-        HR1 = hadamard_product_rec(R[0:len(R)/2])
-        HR2 = hadamard_product_rec(R[len(R)/2:])
+        HR1 = hadamard_product_rec(R[0:len(R) / 2])
+        HR2 = hadamard_product_rec(R[len(R) / 2:])
         return np.vstack([HR1 + HR2, HR1 - HR2])
 
 def hadamard_rademacher_product(x, k): 
     # returns the product of  (HD)_k ... (HD)_1 x, x must be a matrix with feature vectors as x_shape0-dimensional columns. In other words it returns the product of x with an orthogonal approximately uniform matrix. 
     n = int(np.log(x.shape[0]) / np.log(2))
-    D = -1.0 + 2 * np.random.binomial(1,0.5, size=(x.shape[0],k))
+    D = -1.0 + 2.0 * np.random.binomial(1,0.5, size=(x.shape[0],k))
     for i in range(k):
         x = D[:,i][:, np.newaxis] * x
         x = hadamard_product(x) # the multiplication with D occurs row-wise (since the D matrices are applied on the left of x, they are elementary row operations)
@@ -386,7 +417,7 @@ def stack_power_hadamard_rademacher(x, n_blocks):
     ret = np.zeros((x.shape[0] * n_blocks, x.shape[1]))
     ret[0:x.shape[0], :] = x
     for r in range(1, n_blocks):
-        ret[(r * x.shape[0]):((r+1) * x.shape[0]), :] = hadamard_rademacher_product(ret[((r-1) * x.shape[0]):(r * x.shape[0]), :], 1)
+        ret[(r * x.shape[0]):((r+1) * x.shape[0]), :] = hadamard_rademacher_product(ret[((r - 1) * x.shape[0]):(r * x.shape[0]), :], 1)
     return ret
 # print stack_power_hadamard_rademacher(np.eye(8), 10)
 
@@ -409,17 +440,21 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     HD_dim = X.shape[1]
 
     # The output of hadamard_rademacher_product is a (HD_dim, x.shape[1]) matrix. We stack ceil(n_rff/HD_dim) of those to get a (ceil(n_rff/HD_dim)*HD_dim, x.shape[1]) matrix
-    K = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
-    # K is now of shape (K.shape[0], ceil(n_rff / HD_dim) * HD_dim)
+    prods = np.concatenate([hadamard_rademacher_product(X.T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
+    # prods is now of shape (X.shape[0], ceil(n_rff / HD_dim) * HD_dim)
     del X
     
     # Then we discard some columns 
-    idx = np.random.choice(K.shape[1], size = n_rff, replace = False)
-    K = K[:, idx]
+    # idx = np.random.choice(prods.shape[1], size = n_rff, replace = False) # TODO: replace this by sampling only the last block!
+    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
+    idx = range(idx_last_block) 
+    if idx_last_block < n_rff:
+        idx.extend(np.random.choice(np.arange(idx_last_block, prods.shape[1]), n_rff - idx_last_block, replace = False))
+    prods = prods[:, idx]
 
     # Scale all rows independently so that they're approximately unit length
-    K *= np.sqrt(float(HD_dim) / original_dimension)
-    return K 
+    prods *= np.sqrt(float(HD_dim) / original_dimension)
+    return prods
 # print stacked_hadamard_rademacher(np.eye(7), 3, 1)
 
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
@@ -448,6 +483,24 @@ def HD_fix_norm_subsample_RFF(X, n_rff, seed, scale, k):
 # A = np.concatenate([hadamard_rademacher_product(np.eye(9)[:, np.random.choice(9, 4, replace = False)].T, 1).T for _ in range(13 / 4)], axis = 1)
 # print A * np.sqrt(8)
 # print np.round(np.dot(A.T, A), 2)
+
+def HD_stack_power_gaussian_RFF(X, n_rff, seed, scale):
+    np.random.seed(seed)
+    original_dimension = X.shape[1]
+    X = embed_in_power_of_two(X)
+    HD_dim = X.shape[1]
+    n_blocks = 1 + n_rff / HD_dim
+    prods = stack_power_hadamard_rademacher(X.T, n_blocks).T
+    
+    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
+    idx = range(idx_last_block)
+    if idx_last_block < n_rff:
+        idx.extend(np.random.choice(np.arange(idx_last_block, prods.shape[1]), n_rff - idx_last_block, replace = False))
+    prods = prods[:, idx]
+    
+    prods *= np.sqrt(float(HD_dim) / original_dimension)
+
+    return RFF_from_prod_iid_gaussian_norm(prods / scale, original_dimension)
 
 """
 fastfood
