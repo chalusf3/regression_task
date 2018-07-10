@@ -421,9 +421,9 @@ def stack_power_hadamard_rademacher(x, n_blocks):
     return ret
 # print stack_power_hadamard_rademacher(np.eye(8), 10)
 
-def embed_in_power_of_two(X): # embeds X in (X.shape[0], 2^l) where 2^l is the next highest power of two. Embeds the rows!
+def embed_in_power_of_two(X): # embeds X in (X.shape[0], 2^l) where 2^l is the next larger power of two. Embeds the rows!
     original_dimension = X.shape[1]
-    HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by zero padding
+    HD_dim = 2 ** (int(np.ceil(np.log(original_dimension) / np.log(2)))) # the smallest power of 2 >= x.shape[1]. We embed X in (X.shape[0], R^{HD_dim}) by column sampling
     
     newX = np.zeros((X.shape[0], HD_dim))
     indices = np.random.choice(HD_dim, size = (original_dimension), replace = False)
@@ -517,13 +517,18 @@ def fastfood_prod(x):
     np.random.shuffle(Pi)
     G = np.random.normal(size = (d, 1))
     S = np.sqrt(np.random.chisquare(df = d, size = (d, 1))) / np.linalg.norm(G)
-    
+
     K = hadamard_product(np.multiply(B, x)) # H * B * X
-    K = np.multiply(G, K[Pi, :]) # G * Pi * H*B*K
-    K = hadamard_product(K) # H * G*Pi*H*B*K
-    K = np.multiply(S, K) # S * H*G*Pi*H*B*K
-    K = K / np.sqrt(d) # TODO: check that divide by sqrt(HD_dim) and not sqrt(original_dimension)?
+    K = np.multiply(G, K[Pi, :]) # G * Pi * H*B*X
+    K = hadamard_product(K) # H * G*Pi*H*B*X
+    K = np.multiply(S, K) # S * H*G*Pi*H*B*X
+    K /= np.sqrt(d) # TODO: check that divide by sqrt(HD_dim) and not sqrt(original_dimension)?
     return K
+# import matplotlib.pyplot as plt
+# samples = np.zeros((10000, 2))
+# for i in range(samples.shape[0]):
+#     samples[i] = fastfood_prod(np.eye(2))[0]
+# print np.mean(samples, axis = 0), np.cov(samples.T)
 
 def fastfood_RFF(X, n_rff, seed, scale):
     """ 
@@ -533,10 +538,10 @@ def fastfood_RFF(X, n_rff, seed, scale):
 
     # Embed rows of X in dimension 2^k = HD_dim
     original_dimension = X.shape[1] # dimension of input feature vector
-    X = embed_in_power_of_two(X)
+    X = embed_in_power_of_two(X / scale)
     HD_dim = X.shape[1]
 
-    prods = np.concatenate([fastfood_prod(X.T) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 0).T
+    prods = np.concatenate([fastfood_prod(X.T).T for _ in range(int(np.ceil(float(n_rff) / HD_dim)))], axis = 1)
 
     # subsample to get the right number of features 
     idx = np.random.choice(prods.shape[1], size = n_rff, replace = False)
@@ -544,7 +549,7 @@ def fastfood_RFF(X, n_rff, seed, scale):
 
     # prods *= np.sqrt(float(HD_dim) / original_dimension)
 
-    return RFF_from_full_prod(prods / scale)
+    return RFF_from_full_prod(prods)
 
 """
 POLYNOMIAL KERNELS using unit length random projections
