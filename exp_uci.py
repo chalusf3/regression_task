@@ -127,12 +127,13 @@ def kernel_error(data_name, X_train, noise_var, scale):
             pickle.dump(errors, f)
 
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
-    n_seeds = 10
+    n_seeds = 50
     algos = {}
     algos['iid'] =                   lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale)
     algos['ort'] =                   lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale)
     algos['iid_fix_norm'] =          lambda a, s:                         kernels.iid_fix_norm_RFF(a, n_rff, s, scale)
     algos['ort_fix_norm'] =          lambda a, s:                         kernels.ort_fix_norm_RFF(a, n_rff, s, scale)
+    algos['ort_ss_last'] =           lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale, subsample_all = False)
     # algos['iid_anti'] =              lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff / 2, s, scale))
     # algos['ort_anti'] =              lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff / 2, s, scale))
     algos['HD_1'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1)
@@ -146,8 +147,8 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     # algos['angled_2.1'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 2.1)
     # algos['greedy'] =                lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale)
     # algos['greedy_dir'] =            lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)
-    algos['fastfood'] =              lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)
-    
+    # algos['fastfood'] =              lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)
+
     # algos['iid_polyn'] =             lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
     # algos['ort_polyn'] =             lambda a, s:   kernels.ort_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
     # algos['HD_polyn'] =              lambda a, s:    kernels.HD_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
@@ -159,7 +160,8 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
 
     n_rffs = [4,6,8,10,12,14,16,18,20,22,24,28,32,36,40,44,48,56,64,72,80,88,96]
     # n_rffs = [4,8,16,24,40,56,88,104,128,156] # for squared exponential kernels
-    # n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
+    n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
+    n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256]
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
         for n_rff in n_rffs:
@@ -211,7 +213,7 @@ def plot_regression_errors(data_name, algo_names):
     plt.show()
 
 def main():
-    np.random.seed(3)
+    np.random.seed(0)
     data_name = ['wine', 'airq'][1]
     if data_name == 'wine':
         X, y = load_wine_dataset()
