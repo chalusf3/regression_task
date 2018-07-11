@@ -20,7 +20,7 @@ def var_fixed_norm_est(z, dim, fix_n):
     m = 100
     return 0.5 * (1.0 + mean_fixed_norm_est(2 * z, dim, fix_n)) - mean_fixed_norm_est(z, dim, fix_n)**2
 
-def main():
+def plot_bias_var():
     dim = 4
     xvals = np.linspace(-10, 10, 1000)
     SE = np.exp(-np.power(xvals, 2) / 2)
@@ -53,5 +53,42 @@ def main():
 
     plt.show()
 
+def plot_cov_cos():
+    # plot cov(cos(<z,u1>),cos(<z,u2>)) for u1, u2 unit orthogonal and different lengths ||z||
+    from MSE_plot import mean_fixed_norm
+    zvals = np.linspace(0,1.1,1000)
+    
+    plt.subplot(121)
+    for dim in [4,8,16,32,64,128]:
+        cov_cos = mean_fixed_norm(zvals, dim, np.sqrt(2)) - np.square(mean_fixed_norm(zvals, dim, 1))
+        plt.plot(zvals, cov_cos, linewidth = 1, label = 'cov cos dim = %d fixed norm' % dim)
+    plt.legend()
+
+    # plot cov(cos(<z,u1>),cos(<z,u2>)) for u1, u2 gaussian orthogonal and different lengths ||z||
+    plt.subplot(122)
+    for dim in [16,32,64]:
+        dim = float(dim)
+        mean_prod = 0.0
+        increment = 1.0
+        # increment = fact2(dim-2) / fact2(2*dim-3)
+        print increment
+        for j in range(25):
+            # mean_prod += (-1.0)**j * float(factorial(dim + j - 1.0)) / float(fact2(dim + 2.0 * j - 2.0)) / float(factorial(j)) * np.power(zvals, 2.0 * j) 
+        # mean_prod *= float(fact2(dim)) / float(factorial(dim))
+            # mean_prod += increment
+            # increment *= -1.0 / (1.0 + j) * np.square(zvals) * float(dim + j) / (dim + 2.0 * j)
+
+            # mean_prod = mean_prod + increment
+            # increment *= -np.square(zvals) / 2.0 / (j + 1.0) * (2.0 * (dim+j) - 1.0) / (2.0 * j + dim)
+            # print increment[[200, -200]]
+            pass
+            
+        cov_cos = mean_prod - np.exp(-np.square(zvals))
+        plt.plot(zvals, cov_cos, linewidth = 1, label = 'cov cos dim = %d free norm' % dim)
+    plt.legend()
+    plt.show()
+
+
 if __name__ == '__main__':
-    main()
+    # plot_bias_var()
+    plot_cov_cos()
