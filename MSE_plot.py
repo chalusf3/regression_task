@@ -14,7 +14,25 @@ def MSE_ort(z, n_rff, dim):
         cov += (-1.0)**j / factorial(j) * z**(2 * j) * (np.prod(np.divide(dim + np.arange(j, dtype = np.float32), dim + 2.0 * np.arange(j, dtype = np.float32))) - 1.0)
     I = np.mod(n_rff, dim, dtype = np.float32)
     J = np.floor(n_rff / dim, dtype = np.float32) # J * dim + I = n_rff
+    # estimator is made of J indep blocks of dim orthogonal directions followed by one block of I orthogonal directions
     return MSE_iid(z, n_rff) + (I * (I - 1) + J * dim * (dim - 1)) / np.square(n_rff) * cov
+
+def MSE_ort_weighted(z, n_rff, dim):
+    I = np.mod(n_rff, dim, dtype = np.float32)
+    J = np.floor(n_rff / dim, dtype = np.float32) # J * dim + I = n_rff
+
+    variance_full_blocks = np.zeros(J.shape)
+    variance_full_blocks[J>0] = MSE_ort(z, J[J>0] * dim, dim)
+    variance_partial_block = np.zeros(I.shape)
+    variance_partial_block[I>0] = MSE_ort(z, I[I>0], dim)
+
+    optimal_weight = variance_full_blocks / (variance_full_blocks + variance_partial_block) # estimator = (1-optimal_weight) * full_blocks + optimal_weight * partial_block
+    optimal_weight[J==0] = 1
+    optimal_weight[I==0] = 0
+    variance = (1.0 - optimal_weight) ** 2 * variance_full_blocks + (optimal_weight) ** 2 * variance_partial_block
+    # variance = variance_full_blocks * variance_partial_block / (variance_full_blocks + variance_partial_block)
+    
+    return variance
 
 def mean_fixed_norm(z, dim, fixed_norm):
     z = z * fixed_norm
@@ -48,7 +66,7 @@ def iid_ort(z, dims, n_rffs):
     plt.figure(figsize = (4,3))
     for dim in dims:
         plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'MSE ort d = %d' % dim)
-    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'MSE iid' % dim)
+    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'MSE iid')
     
     plt.legend()
     plt.xlim(0, max(n_rffs))
@@ -58,6 +76,23 @@ def iid_ort(z, dims, n_rffs):
     plt.ylabel('MSE')
     plt.tight_layout()
     plt.savefig('MSE_ort_iid.eps', bbox_inches='tight')
+    plt.show()
+
+def iid_ort_weighted(z, dims, n_rffs):
+    plt.figure(figsize = (8,6))
+    for dim in dims:
+        p = plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'MSE ort d = %d' % dim)
+        plt.plot(n_rffs, MSE_ort_weighted(z, n_rffs, dim), linewidth = 1, label = 'MSE ort d = %d weighted' % dim, color = p[0].get_color())
+    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'MSE iid')
+    
+    plt.legend()
+    plt.xlim(0, max(n_rffs))
+    plt.yscale('log')
+    plt.ylim(ymax = 0.1)
+    plt.xlabel('Number of random Fourier features')
+    plt.ylabel('MSE')
+    plt.tight_layout()
+    plt.savefig('MSE_iid_ort_weighted.eps', bbox_inches='tight')
     plt.show()
 
 def iid_ort_fixed_norm(z, dims, n_rffs, fixed_norm_handle):
@@ -143,22 +178,24 @@ def main():
     z = 1.0
 
     dims = np.power(2, np.arange(2, 10, step = 2), dtype = np.float32)
+    # dims = [1,2,3,4]
     n_rffs = np.arange(1, 4*max(dims), dtype = np.float32)
     # iid_ort(z, dims, n_rffs)
-    
+    iid_ort_weighted(z, dims, n_rffs)
+
     fixed_norm_sqrt = lambda d: np.sqrt(d)
     fixed_norm_mean_chi_sq = lambda d: np.sqrt(2) * sp_spec.gamma((d + 1.0) / 2.0) / sp_spec.gamma(d / 2.0)
 
     # dims = [8, 16, 32]
     # bias_fixed_norm(dims, fixed_norm_mean_chi_sq)
     # iid_fixed_norm(dims, fixed_norm_mean_chi_sq)
-    z = 1.25
-    n_rffs = np.arange(1, max(dims), dtype = np.float32)
+    # z = 1.25
+    # n_rffs = np.arange(1, max(dims), dtype = np.float32)
     # iid_ort_fixed_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
 
-    dims = [8]
-    n_rffs = np.arange(1, 1000 * max(dims), dtype = np.float32)
-    iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
+    # dims = [8]
+    # n_rffs = np.arange(1, 1000 * max(dims), dtype = np.float32)
+    # iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
 
 if __name__ == '__main__':
     main()
