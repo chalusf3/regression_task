@@ -6,6 +6,10 @@ from datetime import timedelta, datetime
 from collections import defaultdict
 import scipy.linalg as sp_la
 import scipy.special as sp_sp
+import time
+
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif')
 
 def load_wine_dataset():
     X = np.zeros(shape = (1599, 11))
@@ -104,6 +108,7 @@ def krr_tune(X_train, y_train, X_cv, y_cv):
             errors[i,j] = np.linalg.norm(y_cv_fit_kernel - y_cv) / y_cv.shape[0]
     print np.round(errors, decimals = 4)
 
+""" # not needed anymore, see exp_pw_err.py for a similar experiment
 def kernel_error(data_name, X_train, noise_var, scale):
     feature_gen_handles = [lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale), \
                            lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff, s, scale)), \
@@ -125,6 +130,7 @@ def kernel_error(data_name, X_train, noise_var, scale):
                 errors[n_rff].append(np.linalg.norm(PhiX_train - sample_gram))
         with open('%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
+"""
 
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     n_seeds = 50
@@ -137,9 +143,11 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     # algos['iid_anti'] =              lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff / 2, s, scale))
     # algos['ort_anti'] =              lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff / 2, s, scale))
     algos['HD_1'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1)
+    algos['HD_2'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2)
+    algos['HD_3'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3)
     algos['HD_1_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 1)
-    # algos['HD_2'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2)
-    # algos['HD_3'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3)
+    algos['HD_2_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 2)
+    algos['HD_3_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 3)
     # algos['angled_0.5'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.5)
     # algos['angled_0.75'] =           lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.75)
     # algos['angled_1.0'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.0)
@@ -158,24 +166,25 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     test_algos = algos.keys()
     algos = {k: algos[k] for k in test_algos}
 
-    n_rffs = [4,6,8,10,12,14,16,18,20,22,24,28,32,36,40,44,48,56,64,72,80,88,96]
-    # n_rffs = [4,8,16,24,40,56,88,104,128,156] # for squared exponential kernels
-    n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
-    n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256]
+    n_rffs = [4,8,12,16,20,24,32] # for squared exponential kernels
+    # n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
+        errors['runtimes'] = defaultdict(list)
         for n_rff in n_rffs:
-            for seed in range(100, n_seeds + 100):
+            start_time = time.time()
+            for seed in range(n_seeds):
                 y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, seed))
                 errors[n_rff].append(np.linalg.norm(y_test_fit - y_test) / y_test.shape[0])
-            print '{} {} \t{} \t{}'.format(algo_name, n_rff, np.mean(errors[n_rff]), np.sqrt(np.var(errors[n_rff])))
+            errors['runtimes'][n_rff] = (time.time() - start_time) / n_seeds
+            print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
     return algos.keys()
 
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
-    n_rffs = [4,2048]
 
+    n_rffs = [4,32]
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
@@ -183,6 +192,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
     
+    n_rffs = [4,2048]
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
@@ -197,19 +207,38 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
 
-def plot_regression_errors(data_name, algo_names):
+def plot_regression_errors(data_name, algo_names, filename = 'regression'):
+    ylim_ticks = [1,0]
     for algo_name in algo_names:
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
             data = pickle.load(f)
-        x = data.keys()
+        x = filter(lambda k: isinstance(k, (int, long)), data.keys())
         x.sort()
         means = np.array([np.mean(data[k]) for k in x])
-        std_dev = np.sqrt([np.mean(np.square(data[k] - np.mean(data[k]))) for k in x])
-        p = plt.plot(x, means, '.-', label = algo_name)
-        plt.fill_between(x, means - std_dev, means + std_dev, color = p[0].get_color(), alpha = 0.05)
-    plt.xscale('log')
+        ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
+        ylim_ticks[1] = max(ylim_ticks[0], np.max(means))
+        low_perc = np.array([np.percentile(data[k], 2.5) for k in x])
+        high_perc = np.array([np.percentile(data[k], 97.5) for k in x])
+        p = plt.plot(x, means, '.-', label = algo_name.replace('_', '\_') )
+        # plt.fill_between(x, low_perc, high_perc, color = p[0].get_color(), alpha = 0.05)
+    
+    plt.xlabel(r'\# random features')
+    # plt.xscale('log')
+    
+    plt.ylabel(r'Average regression error')
     plt.yscale('log')
+
+    if data_name == 'wine':
+        yticks_spacing = 2e-3 # space between y ticks
+    elif data_name == 'airq':
+        yticks_spacing = 5e-3 # space between y ticks
+    ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing), 1 + int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
+    plt.minorticks_off()
+    plt.yticks(yticks_spacing * np.arange(ylim_ticks_integer[0], 1 + ylim_ticks_integer[1]))
+
     plt.legend()
+    plt.tight_layout()
+    plt.savefig('%s_%s.eps' % (data_name, filename))
     plt.show()
 
 def main():
@@ -222,13 +251,15 @@ def main():
     
     X = whiten_data(X)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
-    X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.8)
+    # X_train = 80 % of all data
+    # X_test =  20 % of all data
+    
+    # X_train, y_train, X_cv, y_cv = split_data(X_train, y_train, 0.8)
     # X_train = 64 % of all data
     # X_test =  20 % of all data
     # X_cv =    16 % of all data
 
     noise_var = 1.0
-    # scale = 8.0
     scale = 16.0
     degree = 3
     inhom_term = 1.0
@@ -237,9 +268,14 @@ def main():
 
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
-    keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
-    
+    # keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
+    
+    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
+    keys = ['iid','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
 
 if __name__ == '__main__':
     main()
