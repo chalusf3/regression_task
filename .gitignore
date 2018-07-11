@@ -2,6 +2,7 @@
 output/*
 trash*
 .DS_Store
+._.DS_Store
 *.pk
 
 # Byte-compiled / optimized / DLL files
