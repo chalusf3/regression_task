@@ -168,14 +168,12 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     algos = {k: algos[k] for k in keys}
     return algos
 
-def regression_error_n_rff(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
+def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
     timing = False
     if timing:
         n_seeds = 10000
     else:    
         n_seeds = 50
-
-    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
 
     if data_name == 'airq':
         n_rffs = range(4,24 + 1,2) # for squared exponential kernels
@@ -199,15 +197,13 @@ def regression_error_n_rff(data_name, keys, X_train, y_train, X_test, y_test, no
             pickle.dump(errors, f)
     return algos.keys()
 
-def print_average_regression_error(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
+def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
     if data_name == 'airq':
         n_rff = 12
     elif data_name == 'wine':
         n_rff = 12
 
     n_seeds = 50
-    
-    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
 
     for algo_name, feature_gen_handle in algos.items():
         errors = []
@@ -369,8 +365,10 @@ def main():
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    # regression_error_n_rff(        data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = scale, degree = degree, inhom_term = inhom_term)
-    print_average_regression_error(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = scale, degree = degree, inhom_term = inhom_term)
+    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
+
+    regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
     plot_runtimes(data_name, keys)
