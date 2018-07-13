@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker
 import csv, timeit, pickle
 import krr, gpr, kernels
 from datetime import timedelta, datetime
@@ -186,7 +187,6 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     return algos.keys()
 
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
-
     if data_name == 'airq':
         n_rffs = [4,24] # for squared exponential kernels
     elif data_name == 'wine':
@@ -197,7 +197,6 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     start_time = time.clock()
     for _ in range(n_trials):
         y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-        print 1
     errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
     errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
@@ -205,7 +204,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
     with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
-    '''
+    
     n_rffs = [4,2048]
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
@@ -220,7 +219,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
-    '''
+    
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (8,6))
     ylim_ticks = [1,0]
@@ -231,31 +230,35 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
         x.sort()
         means = np.array([np.mean(data[k]) for k in x])
         ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
-        ylim_ticks[1] = max(ylim_ticks[0], np.max(means))
+        ylim_ticks[1] = max(ylim_ticks[1], np.max(means))
         low_perc = np.array([np.percentile(data[k], 2.5) for k in x])
         high_perc = np.array([np.percentile(data[k], 97.5) for k in x])
-        p = plt.plot(x, means, '.-', label = algo_name.replace('_', '\_') )
+        p = plt.semilogy(x, means, '.-', label = algo_name.replace('_', '\_') )
         # plt.fill_between(x, low_perc, high_perc, color = p[0].get_color(), alpha = 0.05)
     
     plt.xlabel(r'\# random features')
-    # plt.xscale('log')
     
     plt.ylabel(r'Average regression error')
-    plt.yscale('log')
+    # plt.yscale('log')
 
     if data_name == 'wine':
         yticks_spacing = 2.5e-2 # space between y ticks
     elif data_name == 'airq':
         yticks_spacing = 5e-2 # space between y ticks
 
-    ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing + 1), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
+    yticks_lim_integer = (1 + int(ylim_ticks[0] / yticks_spacing), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
     plt.minorticks_off()
-    plt.yticks(yticks_spacing * np.arange(ylim_ticks_integer[0], 1 + ylim_ticks_integer[1]))
+    plt.yticks(yticks_spacing * np.arange(yticks_lim_integer[0], 1 + yticks_lim_integer[1]))
+    plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.2f'))
+
+    xticks_lim = [(int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2]
+    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
 
     plt.legend()
     plt.tight_layout()
     plt.savefig('%s_%s.eps' % (data_name, filename))
-    plt.show()
+    # plt.show()
+    plt.clf()
 
 def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (8,6))
@@ -271,23 +274,18 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
         plt.plot(n_rffs, runtimes, '.-', label = algo_name.replace('_', '\_') )
         
     plt.xlabel(r'\# random features')
-    
     plt.ylabel(r'Average runtime')
     
-    # if data_name == 'wine':
-    #     yticks_spacing = 2.5e-2 # space between y ticks
-    # elif data_name == 'airq':
-    #     yticks_spacing = 5e-2 # space between y ticks
-
-    # ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing + 1), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
-    # plt.minorticks_off()
-    # plt.yticks(yticks_spacing * np.arange(ylim_ticks_integer[0], 1 + ylim_ticks_integer[1]))
-    # print plt.yticks()
+    xticks_lim = ((int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2)
+    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
+    
+    plt.ylim(0)
 
     plt.legend()
     plt.tight_layout()
     plt.savefig('runtime_%s_%s.eps' % (data_name, filename))
-    plt.show()
+    # plt.show()
+    plt.clf()
 
 def main():
     np.random.seed(0)
@@ -297,6 +295,8 @@ def main():
     elif data_name == 'airq':
         X, y = load_air_quality_dataset()
     
+    print data_name, [np.percentile(y, [0, 2.5, 50, 97.5, 100])]
+
     X = whiten_data(X)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
     # X_train = 80 % of all data
@@ -316,7 +316,7 @@ def main():
 
     regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
-    # keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
@@ -326,6 +326,7 @@ def main():
     plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
     plot_runtimes(data_name, keys, filename = 'iid_ort')
     keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
     plot_runtimes(data_name, keys, filename = 'HD')
 
 if __name__ == '__main__':
