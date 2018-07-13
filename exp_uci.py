@@ -133,39 +133,49 @@ def kernel_error(data_name, X_train, noise_var, scale):
             pickle.dump(errors, f)
 """
 
-def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
-    n_seeds = 50 # 10000
+def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     algos = {}
-    algos['iid'] =                   lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale)
-    algos['ort'] =                   lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale)
-    algos['iid_fix_norm'] =          lambda a, s:                         kernels.iid_fix_norm_RFF(a, n_rff, s, scale)
-    algos['ort_fix_norm'] =          lambda a, s:                         kernels.ort_fix_norm_RFF(a, n_rff, s, scale)
-    algos['ort_ss_last'] =           lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale, subsample_all = False)
-    # algos['iid_anti'] =              lambda a, s: kernels.make_antithetic(kernels.iid_gaussian_RFF(a, n_rff / 2, s, scale))
-    # algos['ort_anti'] =              lambda a, s: kernels.make_antithetic(kernels.ort_gaussian_RFF(a, n_rff / 2, s, scale))
-    algos['HD_1'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 1)
-    algos['HD_2'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 2)
-    algos['HD_3'] =                  lambda a, s:                          kernels.HD_gaussian_RFF(a, n_rff, s, scale, 3)
-    algos['HD_1_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 1)
-    algos['HD_2_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 2)
-    algos['HD_3_fix_norm'] =         lambda a, s:                          kernels.HD_fix_norm_RFF(a, n_rff, s, scale, 3)
-    # algos['angled_0.5'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.5)
-    # algos['angled_0.75'] =           lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 0.75)
-    # algos['angled_1.0'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.0)
-    # algos['angled_1.25'] =           lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 1.25)
-    # algos['angled_2.1'] =            lambda a, s:            kernels.angled_gaussian_neighbour_RFF(a, n_rff, s, scale, 2.1)
-    # algos['greedy'] =                lambda a, s:                 kernels.greedy_unif_gaussian_RFF(a, n_rff, s, scale)
-    # algos['greedy_dir'] =            lambda a, s:                  kernels.greedy_dir_gaussian_RFF(a, n_rff, s, scale)
-    # algos['fastfood'] =              lambda a, s:                             kernels.fastfood_RFF(a, n_rff, s, scale)
+    # RBF kernels
+    algos['iid'] =                   lambda raw_feature, n_rff, seed:                         kernels.iid_gaussian_RFF(raw_feature, n_rff, seed, scale)
+    algos['ort'] =                   lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale)
+    algos['iid_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.iid_fix_norm_RFF(raw_feature, n_rff, seed, scale)
+    algos['ort_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.ort_fix_norm_RFF(raw_feature, n_rff, seed, scale)
+    algos['ort_ss_last'] =           lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, subsample_all = False)
+    algos['iid_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
+    algos['ort_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
+    algos['HD_1'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 1)
+    algos['HD_2'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 2)
+    algos['HD_3'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 3)
+    algos['HD_1_fix_norm'] =         lambda raw_feature, n_rff, seed:                          kernels.HD_fix_norm_RFF(raw_feature, n_rff, seed, scale, 1)
+    algos['HD_2_fix_norm'] =         lambda raw_feature, n_rff, seed:                          kernels.HD_fix_norm_RFF(raw_feature, n_rff, seed, scale, 2)
+    algos['HD_3_fix_norm'] =         lambda raw_feature, n_rff, seed:                          kernels.HD_fix_norm_RFF(raw_feature, n_rff, seed, scale, 3)
+    algos['angled_0.5'] =            lambda raw_feature, n_rff, seed:            kernels.angled_gaussian_neighbour_RFF(raw_feature, n_rff, seed, scale, 0.5)
+    algos['angled_0.75'] =           lambda raw_feature, n_rff, seed:            kernels.angled_gaussian_neighbour_RFF(raw_feature, n_rff, seed, scale, 0.75)
+    algos['angled_1.0'] =            lambda raw_feature, n_rff, seed:            kernels.angled_gaussian_neighbour_RFF(raw_feature, n_rff, seed, scale, 1.0)
+    algos['angled_1.25'] =           lambda raw_feature, n_rff, seed:            kernels.angled_gaussian_neighbour_RFF(raw_feature, n_rff, seed, scale, 1.25)
+    algos['angled_2.1'] =            lambda raw_feature, n_rff, seed:            kernels.angled_gaussian_neighbour_RFF(raw_feature, n_rff, seed, scale, 2.1)
+    algos['greedy'] =                lambda raw_feature, n_rff, seed:                 kernels.greedy_unif_gaussian_RFF(raw_feature, n_rff, seed, scale)
+    algos['greedy_dir'] =            lambda raw_feature, n_rff, seed:                  kernels.greedy_dir_gaussian_RFF(raw_feature, n_rff, seed, scale)
+    algos['fastfood'] =              lambda raw_feature, n_rff, seed:                             kernels.fastfood_RFF(raw_feature, n_rff, seed, scale)
 
-    # algos['iid_polyn'] =             lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
-    # algos['ort_polyn'] =             lambda a, s:   kernels.ort_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
-    # algos['HD_polyn'] =              lambda a, s:    kernels.HD_polynomial_sp_random_unit_features(a, n_rff, s, degree, inhom_term)
-    # algos['iid_polynomial_sp'] =     lambda a, s:        kernels.iid_polynomial_sp_random_features(a, n_rff, s, degree, inhom_term)
-    # algos['iid_exponential_sp'] =    lambda a, s:       kernels.iid_exponential_sp_random_features(a, n_rff, s, scale)
+    # Dot product kernels
+    algos['iid_polyn'] =             lambda raw_feature, n_rff, seed:        kernels.iid_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['ort_polyn'] =             lambda raw_feature, n_rff, seed:   kernels.ort_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['HD_polyn'] =              lambda raw_feature, n_rff, seed:    kernels.HD_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['iid_polynomial_sp'] =     lambda raw_feature, n_rff, seed:        kernels.iid_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['iid_exponential_sp'] =    lambda raw_feature, n_rff, seed:       kernels.iid_exponential_sp_random_features(raw_feature, n_rff, seed, scale)
 
-    test_algos = algos.keys()
-    algos = {k: algos[k] for k in test_algos}
+    algos = {k: algos[k] for k in keys}
+    return algos
+
+def regression_error_n_rff(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
+    timing = False
+    if timing:
+        n_seeds = 10000
+    else:    
+        n_seeds = 50
+
+    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
 
     if data_name == 'airq':
         n_rffs = range(4,24 + 1,2) # for squared exponential kernels
@@ -178,14 +188,36 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
         for n_rff in n_rffs:
             start_time = time.clock()
             for seed in range(n_seeds):
-                y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, seed))
+                y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda raw_feature: feature_gen_handle(raw_feature, n_rff, seed))
                 errors[n_rff].append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
             errors['runtimes'][n_rff] = (time.clock() - start_time) / n_seeds
             print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
-        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
+        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
+            old_errors = pickle.load(f)
+            if 'runtimes' in old_errors.keys() and not timing:
+                errors['runtimes'] = old_errors['runtimes']
             pickle.dump(errors, f)
     return algos.keys()
 
+def print_average_regression_error(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
+    if data_name == 'airq':
+        n_rff = 12
+    elif data_name == 'wine':
+        n_rff = 12
+
+    n_seeds = 50
+    
+    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
+
+    for algo_name, feature_gen_handle in algos.items():
+        errors = []
+        start_time = time.clock()
+        for seed in range(n_seeds):
+            y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, n_rff, seed))
+            errors.append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
+        runtime = (time.clock() - start_time) / n_seeds
+        print '{} \tn_rff = {} \tmean = {} 5% CI = {} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), np.percentile(errors, [2.5, 97.5]), runtime)
+    
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
     if data_name == 'airq':
         n_rffs = [4,24] # for squared exponential kernels
@@ -193,7 +225,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
         n_rffs = [4,32] # for squared exponential kernels
     errors = {}
     errors['runtimes'] = {}
-    n_trials = 10
+    n_trials = 1
     start_time = time.clock()
     for _ in range(n_trials):
         y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
@@ -207,16 +239,30 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     
     n_rffs = [4,2048]
     errors = {}
-    y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
+    errors['runtimes'] = {}
+    n_trials = 1
+    start_time = time.clock()
+    for _ in range(n_trials):
+        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
+    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
+    print '{} \t{} \t{:.4}sec'.format('exponential scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
     with open('output/%s_exact_exp_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
     
     errors = {}
-    y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
+    errors['runtimes'] = {}
+    n_trials = 1
+    start_time = time.clock()
+    for _ in range(n_trials):
+        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
+    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
+    print '{} \t{} \t{:.4}sec'.format('polynomial scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
     with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
     
@@ -287,6 +333,12 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     # plt.show()
     plt.clf()
 
+def plot_efficiency(data_name, algo_names, filename = 'regression'):
+    pass
+
+def dependence_n_datapoints(data_name, algo_names, filename):
+    pass
+
 def main():
     np.random.seed(0)
     data_name = ['wine', 'airq'][1]
@@ -314,17 +366,19 @@ def main():
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
 
-    regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
-    keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
-    
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    # regression_error_n_rff(        data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = scale, degree = degree, inhom_term = inhom_term)
+    print_average_regression_error(data_name, keys, X_train, y_train, X_test, y_test, noise_var, scale = scale, degree = degree, inhom_term = inhom_term)
+
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
     plot_runtimes(data_name, keys)
     
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last']
     plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
     plot_runtimes(data_name, keys, filename = 'iid_ort')
+    
     keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
     plot_runtimes(data_name, keys, filename = 'HD')
