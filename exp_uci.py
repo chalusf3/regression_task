@@ -133,7 +133,7 @@ def kernel_error(data_name, X_train, noise_var, scale):
 """
 
 def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):
-    n_seeds = 50
+    n_seeds = 50 # 10000
     algos = {}
     algos['iid'] =                   lambda a, s:                         kernels.iid_gaussian_RFF(a, n_rff, s, scale)
     algos['ort'] =                   lambda a, s:                         kernels.ort_gaussian_RFF(a, n_rff, s, scale)
@@ -166,17 +166,20 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
     test_algos = algos.keys()
     algos = {k: algos[k] for k in test_algos}
 
-    n_rffs = [4,8,12,16,20,24,32] # for squared exponential kernels
+    if data_name == 'airq':
+        n_rffs = range(4,24 + 1,2) # for squared exponential kernels
+    elif data_name == 'wine':
+        n_rffs = range(4,32 + 1,2) # for squared exponential kernels
     # n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
         errors['runtimes'] = defaultdict(list)
         for n_rff in n_rffs:
-            start_time = time.time()
+            start_time = time.clock()
             for seed in range(n_seeds):
                 y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, seed))
-                errors[n_rff].append(np.linalg.norm(y_test_fit - y_test) / y_test.shape[0])
-            errors['runtimes'][n_rff] = (time.time() - start_time) / n_seeds
+                errors[n_rff].append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
+            errors['runtimes'][n_rff] = (time.clock() - start_time) / n_seeds
             print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
             pickle.dump(errors, f)
@@ -184,30 +187,42 @@ def regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_va
 
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
 
-    n_rffs = [4,32]
+    if data_name == 'airq':
+        n_rffs = [4,24] # for squared exponential kernels
+    elif data_name == 'wine':
+        n_rffs = [4,32] # for squared exponential kernels
     errors = {}
-    y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors['runtimes'] = {}
+    n_trials = 10
+    start_time = time.clock()
+    for _ in range(n_trials):
+        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+        print 1
+    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
+    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
+    print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
     with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
-    
+    '''
     n_rffs = [4,2048]
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     with open('output/%s_exact_exp_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
     
     errors = {}
     y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test) / y_test.shape[0]]
+    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
         pickle.dump(errors, f)
-
+    '''
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
+    plt.figure(figsize = (8,6))
     ylim_ticks = [1,0]
     for algo_name in algo_names:
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
@@ -229,16 +244,49 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.yscale('log')
 
     if data_name == 'wine':
-        yticks_spacing = 2e-3 # space between y ticks
+        yticks_spacing = 2.5e-2 # space between y ticks
     elif data_name == 'airq':
-        yticks_spacing = 5e-3 # space between y ticks
-    ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing), 1 + int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
+        yticks_spacing = 5e-2 # space between y ticks
+
+    ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing + 1), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
     plt.minorticks_off()
     plt.yticks(yticks_spacing * np.arange(ylim_ticks_integer[0], 1 + ylim_ticks_integer[1]))
 
     plt.legend()
     plt.tight_layout()
     plt.savefig('%s_%s.eps' % (data_name, filename))
+    plt.show()
+
+def plot_runtimes(data_name, algo_names, filename = 'regression'):
+    plt.figure(figsize = (8,6))
+    # ylim_ticks = [1,0]
+    for algo_name in algo_names:
+        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
+            data = pickle.load(f)['runtimes']
+        n_rffs = data.keys()
+        n_rffs.sort()
+        runtimes = np.array([data[n_rff] for n_rff in n_rffs])
+        # ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
+        # ylim_ticks[1] = max(ylim_ticks[0], np.max(means))
+        plt.plot(n_rffs, runtimes, '.-', label = algo_name.replace('_', '\_') )
+        
+    plt.xlabel(r'\# random features')
+    
+    plt.ylabel(r'Average runtime')
+    
+    # if data_name == 'wine':
+    #     yticks_spacing = 2.5e-2 # space between y ticks
+    # elif data_name == 'airq':
+    #     yticks_spacing = 5e-2 # space between y ticks
+
+    # ylim_ticks_integer = (int(ylim_ticks[0] / yticks_spacing + 1), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
+    # plt.minorticks_off()
+    # plt.yticks(yticks_spacing * np.arange(ylim_ticks_integer[0], 1 + ylim_ticks_integer[1]))
+    # print plt.yticks()
+
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('runtime_%s_%s.eps' % (data_name, filename))
     plt.show()
 
 def main():
@@ -266,16 +314,19 @@ def main():
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
 
-    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
     # keys = regression_error_n_rff(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
+    plot_runtimes(data_name, keys)
     
     keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last']
     plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
-    keys = ['iid','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
+    plot_runtimes(data_name, keys, filename = 'iid_ort')
+    keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    plot_runtimes(data_name, keys, filename = 'HD')
 
 if __name__ == '__main__':
     main()
