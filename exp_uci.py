@@ -140,7 +140,7 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     algos['ort'] =                   lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale)
     algos['iid_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.iid_fix_norm_RFF(raw_feature, n_rff, seed, scale)
     algos['ort_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.ort_fix_norm_RFF(raw_feature, n_rff, seed, scale)
-    algos['ort_ss_last'] =           lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, subsample_all = False)
+    algos['ort_ss_all'] =            lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, subsample_all = True)
     algos['iid_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
     algos['ort_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
     algos['HD_1'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 1)
@@ -190,11 +190,21 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
                 errors[n_rff].append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
             errors['runtimes'][n_rff] = (time.clock() - start_time) / n_seeds
             print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
-        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
-            old_errors = pickle.load(f)
-            if 'runtimes' in old_errors.keys() and not timing:
-                errors['runtimes'] = old_errors['runtimes']
+
+        filename = 'output/%s_%s_krr.pk' % (data_name, algo_name)
+        try:
+            with open(filename, 'rb') as f:
+                old_errors = pickle.load(f)
+                if 'runtimes' in old_errors.keys() and not timing:
+                    errors['runtimes'] = old_errors['runtimes']
+        except IOError:
+            print '%s file did not previously exist' % filename
+        except EOFError:
+            print '%s was not a pickle file' % filename
+            
+        with open(filename, 'wb') as f:
             pickle.dump(errors, f)
+            
     return algos.keys()
 
 def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
@@ -230,7 +240,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
+    with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb+') as f:
         pickle.dump(errors, f)
     
     n_rffs = [4,2048]
@@ -245,7 +255,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('exponential scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_exp_sp_krr.pk' % data_name, 'wb') as f:
+    with open('output/%s_exact_exp_sp_krr.pk' % data_name, 'wb+') as f:
         pickle.dump(errors, f)
     
     errors = {}
@@ -259,14 +269,14 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('polynomial scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb') as f:
+    with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb+') as f:
         pickle.dump(errors, f)
     
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (8,6))
     ylim_ticks = [1,0]
     for algo_name in algo_names:
-        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
+        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
             data = pickle.load(f)
         x = filter(lambda k: isinstance(k, (int, long)), data.keys())
         x.sort()
@@ -362,9 +372,9 @@ def main():
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
 
-    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
 
-    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
 
     regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
@@ -373,7 +383,7 @@ def main():
     plot_regression_errors(data_name, ['exact_gauss'] + keys)
     plot_runtimes(data_name, keys)
     
-    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_last']
+    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all']
     plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
     plot_runtimes(data_name, keys, filename = 'iid_ort')
     
