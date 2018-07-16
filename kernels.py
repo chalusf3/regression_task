@@ -30,28 +30,48 @@ shared utility functions to convert scalar products with unit frequencies into R
 def make_antithetic(feats):
     return np.concatenate([feats, np.conj(feats)], axis = 1) / np.sqrt(2)
 
-def RFF_from_full_prod(prods):
+def RFF_from_full_prod(prods, block_size = 1):
     # prods contains inner products of data vectors with correctly scaled uniform directions
+    # we assume that there are contiguous blocks of columns, each block of size block_size. Those blocks of columns are assumed to be independent of each other. The last block may be truncated and needs to be weighted accordingly
     n_rff = prods.shape[1]
     RFF = np.concatenate([np.cos(prods), np.sin(prods)], axis = 1) # np.exp(1j * prods)
-    return RFF / np.sqrt(n_rff)
+    
+    coefficients = np.ones(n_rff) / n_rff
+    n_blocks = int(n_rff / block_size)
+    idx_last_block = n_blocks * block_size
+    n_col_last_block = n_rff - idx_last_block
+    if n_col_last_block > 0 and idx_last_block > 0:
+        coefficients[:idx_last_block] *= float(n_rff) / idx_last_block
+        coefficients[idx_last_block:] *= float(n_rff) / n_col_last_block
+        # Now we reduced the problem to weighing two estimators with different variances. We guesstimate from the optimal weights curves that when
+        # the second estimator relies on just 1 value, its weighting should be ~~= 0 where as when its block_size then its weight should 
+        # be = 1 / (n_blocks in first estimator + 1). In between we interpolate by a quadratic curve because that's what seems to be optimal (run MSE_plot.py)
+        optimal_weight = (float(n_col_last_block) / block_size) ** 2 * 1 / (n_blocks + 1)
+        coefficients[:idx_last_block] *= (1.0-optimal_weight)
+        coefficients[idx_last_block:] *= optimal_weight
+        
+    coefficients = np.sqrt(coefficients)
 
-def RFF_from_prod_iid_gaussian_norm(prods, dim):
+    coefficients = np.concatenate([coefficients[np.newaxis, :]] * 2, axis = 1)
+    RFF *= coefficients
+    return RFF
+
+def RFF_from_prod_iid_gaussian_norm(prods, dim, block_size = 1):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
     n_rff = prods.shape[1]
     norms = np.sqrt(np.random.chisquare(df = dim, size = n_rff))
     prods = np.multiply(prods, norms[np.newaxis, :])
 
-    return RFF_from_full_prod(prods)
+    return RFF_from_full_prod(prods, block_size = block_size)
 
-def RFF_from_prod_fix_norm(prods, dim):
+def RFF_from_prod_fix_norm(prods, dim, block_size = 1):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
     norm = np.sqrt(2) * sp_spec.gamma((dim + 1.0) / 2.0) / sp_spec.gamma(dim / 2.0)
     prods *= norm
 
-    return RFF_from_full_prod(prods)
+    return RFF_from_full_prod(prods, block_size = block_size)
 
-def RFF_from_prod_inv_gaussian_norm(prods, dim):
+def RFF_from_prod_inv_gaussian_norm(prods, dim, block_size = 1):
     # prods contains inner products of dim-dimensional vectors with unit uniform directions (shape of prods = (n_points, n_rff))
     # this function generates n_rff / 2 norms, their inverse norms via F(r_1) + F(r_2) = 1 and pointwise multiplies with prods
 
@@ -61,7 +81,7 @@ def RFF_from_prod_inv_gaussian_norm(prods, dim):
     inv_norms = np.sqrt(sp_stats.chi2.ppf(1-sp_stats.chi2.cdf(np.square(norms), dim), dim))
     prods = np.multiply(prods, np.concatenate([norms, inv_norms]))
 
-    return RFF_from_full_prod(prods)
+    return RFF_from_full_prod(prods, block_size = block_size)
 
 """
 random Fourier features iid
@@ -71,7 +91,7 @@ def iid_gaussian_RFF(X, n_rff, seed, scale):
     # where omega_{i} are i.i.d. N(0, 1/scale^2)
     np.random.seed(seed)
     omega = np.random.normal(size = (X.shape[1], n_rff)) # random frequencies in columns
-    PhiX = RFF_from_full_prod(np.dot(X, omega) / scale)
+    PhiX = RFF_from_full_prod(np.dot(X, omega) / scale, block_size = 1)
     # PhiX = RFF_from_prod_iid_gaussian_norm(np.dot(X, omega / np.linalg.norm(omega, axis = 0)) / scale, X.shape[1]) # just for testing consistency
     return PhiX
 
@@ -139,14 +159,17 @@ def stacked_unif_ort(shape, subsample_all):
 # print A
 # print np.round(np.dot(A.T, A), decimals = 2)
 
-def ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False):
+def ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = True):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     dim = X.shape[1]
     omega = stacked_unif_ort((dim, n_rff), subsample_all = subsample_all)
     assert(omega.shape == (dim, n_rff))
-    return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim)
+    if weighted:
+        return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim, block_size = dim)
+    else:
+        return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim, block_size = 1)
 # dirs = stacked_unif_ort((3, 100), False)
 # dirs *= np.sqrt(np.random.chisquare(df = dirs.shape[0], size = dirs.shape[1]))
 # dirs = dirs.flatten()
@@ -154,13 +177,16 @@ def ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False):
 # sp_stats.probplot(dirs, dist="norm", plot=pylab)
 # pylab.show()
 
-def ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False):
+def ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = True):
     # generates n_rff orthogonal frequencies of dimension X.shape[1] (e.g. omega is of shape (X.shape[1], n_rff))
     # and maps them to random fourier features vectors (stacked row by row, similar to the structure of X)
     np.random.seed(seed)
     dim = X.shape[1]
     omega = stacked_unif_ort((dim, n_rff), subsample_all = subsample_all)
-    return RFF_from_prod_fix_norm(np.dot(X, omega) / scale, dim)
+    if weighted:
+        return RFF_from_prod_fix_norm(np.dot(X, omega) / scale, dim, block_size = dim)
+    else:
+        return RFF_from_prod_fix_norm(np.dot(X, omega) / scale, dim, block_size = 1)
 
 """
 Generate Fourier features with a certain angle between all vectors (if dimension allows it) 
@@ -177,16 +203,17 @@ def T_matrix(C):
     for j in xrange(1, k):
         T[0, j] = C[0, j] / T[0, 0]
         for i in xrange(1, j):
-            T[i, j] = (C[i, j] - np.dot(T[:(i), i].T, T[:(i), j])) / T[i, i]
+            T[i, j] = (C[i, j] - np.dot(T[:i, i].T, T[:i, j])) / T[i, i]
         T[j, j] = np.sqrt(C[j,j] - np.dot(T[:, j], T[:, j].T)) # for normalization purposes
         # if T[j, j] == np.nan:
         #     break
     
     return T
-# C = 0.4 * np.ones((10, 10)) # 10 features
+# C = 0.4 * np.ones((100, 100)) # 10 features
 # np.fill_diagonal(C, 1)
 # T = T_matrix(C)
 # print np.dot(T.T, T)
+# print np.round(T, 4)
 # A = stacked_unif_ort_gaussian((7, 10)) # 10 7-dimensional orthogonal features
 # print np.round(np.dot(A.T, A), decimals = 2)
 # stacked_angled = np.dot(A, T)
@@ -205,24 +232,46 @@ def T_matrix(C):
 #     C -= np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), n_rff / 4) + np.diag(angles[n_rff / 4] * np.ones(n_rff / 4), -n_rff / 4)
 # print C
 
+def T_matrix_single(c, n_vec):
+    T = np.zeros((n_vec, n_vec))
+    T[0,0] = 1
+    for i in range(n_vec - 1):
+        # set T[i, i+1:]
+        T[i, i+1:] = (c - np.dot(T[:i, n_vec-1].T, T[:i, i])) / T[i, i]
+
+        # set T[i+1, i+1]
+        if 1 - np.dot(T[:i+1, i+1].T, T[:i+1, i+1]) >= 0:
+            T[i+1, i+1] = np.sqrt(1 - np.dot(T[:i+1, i+1].T, T[:i+1, i+1]))
+        else:
+            T[:i+1, i+1:] = 0
+            T[i+1, i+1] = np.sqrt(1 - np.dot(T[:i+1, i+1].T, T[:i+1, i+1]))
+    return T
+# T = T_matrix_single(-0.3, 10)
+# print np.dot(T.T, T)
+# print np.round(T, 2)
+
 def angled_block(dim, scal_prod):
     # returns a dim x dim matrix of norm 1 columns having scalar products = scal_prod
-    C = np.ones((dim, dim)) * scal_prod
-    np.fill_diagonal(C, 1)
-    angle_matrix = T_matrix(C)
+    # C = np.ones((dim, dim)) * scal_prod
+    # np.fill_diagonal(C, 1)
+    # angle_matrix = T_matrix(C)
+    angle_matrix = T_matrix_single(scal_prod, dim)
     
-    if np.isnan(angle_matrix[-1, -1]):
-        max_d = np.min(np.argwhere(np.isnan(angle_matrix)).flatten()) # we can only draw that many vectors satisfying those angles
-    else:
-        max_d = angle_matrix.shape[0]
-    max_d = min(max_d, dim)
-    # print 'can only enforce %d relations for scalar product %f' % (max_d, scal_prod)
-    angle_matrix = angle_matrix[:, :max_d]
+    # if np.isnan(angle_matrix[-1, -1]):
+    #     max_d = np.min(np.argwhere(np.isnan(angle_matrix)).flatten()) # we can only draw that many vectors satisfying those angles
+    # else:
+    max_d = angle_matrix.shape[0]
+    # max_d = min(max_d, dim)
+    # # print 'can only enforce %d relations for scalar product %f' % (max_d, scal_prod)
+    # angle_matrix = angle_matrix[:, :max_d]
 
-    ret = [np.dot(unif_ort_QR(dim), angle_matrix) for _ in range(int(np.ceil(float(dim) / max_d)))]
-    ret = np.concatenate(ret, axis = 1)
-    ret = ret[:, :dim]
+    ret = np.dot(unif_ort_QR(dim), angle_matrix)
+    # ret = [np.dot(unif_ort_QR(dim), angle_matrix) for _ in range(int(np.ceil(float(dim) / max_d)))]
+    # ret = np.concatenate(ret, axis = 1)
+    # ret = ret[:, :dim]
     return ret
+# A = angled_block(4, -0.2)
+# print np.dot(A.T, A), A
 
 def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
     # angle is between 0 and pi 
@@ -232,13 +281,10 @@ def angled_gaussian_RFF(X, n_rff, seed, scale, angle):
 
     omega = [angled_block(X.shape[1], np.cos(angle)) for _ in range(int(np.ceil(float(n_rff) / X.shape[1])))]
     omega = np.concatenate(omega, axis = 1)
-    idx = np.random.choice(omega.shape[1], size = n_rff, replace = False) # idx = range(shape[1])
-    omega = omega[:, idx]
+    # idx = np.random.choice(omega.shape[1], size = n_rff, replace = False) # idx = range(shape[1])
+    omega = omega[:, :n_rff]
     return RFF_from_prod_iid_gaussian_norm(np.dot(X, omega) / scale, dim)
-    # omega = np.multiply(np.sqrt(np.random.chisquare(df = X.shape[1], size = (1, n_rff))), omega / scale)
-
-    # PhiX = np.exp(1j * np.dot(X, omega)) / np.sqrt(n_rff)
-    # return PhiX
+# angled_gaussian_RFF(np.random.normal(size = (1,5)), 13, 0, 1, 1.8)
 
 def spherical_coord(angles):
     v = np.ones(angles.shape[0]+1)
@@ -341,7 +387,7 @@ def greedy_dir_gaussian_RFF(X, n_rff, seed, scale):
 
     omega = np.dot(unif_ort_QR(X.shape[1]), greedy_directions(X.shape[1], n_rff)) # randomize the directions generated greedily
 
-    return RFF_from_full_prod(np.dot(X, omega) / scale)
+    return RFF_from_full_prod(np.dot(X, omega) / scale, block_size = 1)
 
 """
 Givens approach to generate samples with a certain angles
@@ -545,11 +591,11 @@ def fastfood_RFF(X, n_rff, seed, scale):
 
     # subsample to get the right number of features 
     idx = np.random.choice(prods.shape[1], size = n_rff, replace = False)
-    prods = prods[:, idx]
+    prods = prods[:, :n_rff] # prods[:, idx]
 
     # prods *= np.sqrt(float(HD_dim) / original_dimension)
 
-    return RFF_from_full_prod(prods)
+    return RFF_from_full_prod(prods, block_size = HD_dim)
 
 """
 POLYNOMIAL KERNELS using unit length random projections
