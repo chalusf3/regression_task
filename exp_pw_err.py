@@ -10,58 +10,71 @@ plt.rc('font', family='serif')
 def squared_exponential_kernel():
     dim = 24
     scale = np.sqrt(dim) * 2
-    n_seeds = 500
-    max_n_rff = 2 + 10 * dim
+    n_seeds = 5000
+    max_n_rff = 10 * dim + 1
     algos = {}
     algos['iid'] =           lambda X, n_rff, seed: kernels.iid_gaussian_RFF(X, n_rff, seed, scale)
-    # algos['iid_fix_norm'] =  lambda X, n_rff, seed: kernels.iid_fix_norm_RFF(X, n_rff, seed, scale)
+    algos['iid_fixed_norm'] =  lambda X, n_rff, seed: kernels.iid_fix_norm_RFF(X, n_rff, seed, scale)
     # algos['iid_invnorm'] =   lambda X, n_rff, seed: kernels.iid_invnorm_gaussian_RFF(X, n_rff, seed, scale)
-    algos['ort_ss_all'] =           lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = True)
-    algos['ort_ss_last'] =          lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False)
-    # algos['ort_fix_norm_ss_all'] =  lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = True)
-    # algos['ort_fix_norm_ss_last'] = lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False)
+    # algos['ort_ss_all'] =           lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = True, weighted = False)
+    algos['ort'] =          lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = False)
+    algos['ort_weighted'] = lambda X, n_rff, seed: kernels.ort_gaussian_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = True)
+    # algos['ort_fix_norm_ss_all'] =  lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = True, weighted = False)
+    algos['ort_fixed_norm'] = lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = False)
+    algos['ort_fixed_norm_weighted'] = lambda X, n_rff, seed: kernels.ort_fix_norm_RFF(X, n_rff, seed, scale, subsample_all = False, weighted = True)
     # algos['iid_anti'] =      lambda X, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(X, n_rff / 2, seed, scale))
     # algos['ort_anti'] =      lambda X, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(X, n_rff / 2, seed, scale))
-    algos['HD_1'] =          lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1)
-    # algos['HD_fix_norm_1'] = lambda X, n_rff, seed: kernels.HD_fix_norm_RFF(X, n_rff, seed, scale, 1)
+    # algos['HD_stack_power'] = lambda X, n_rff, seed: kernels.HD_stack_power_gaussian_RFF(X, n_rff, seed, scale)
+    # algos['HD_1'] =           lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 1)
+    # algos['HD_fix_norm_1'] =  lambda X, n_rff, seed: kernels.HD_fix_norm_RFF(X, n_rff, seed, scale, 1)
     # algos['HD_fix_norm_1_subsample'] = lambda X, n_rff, seed: kernels.HD_fix_norm_subsample_RFF(X, n_rff, seed, scale, 1)
-    algos['HD_stack_power'] = lambda X, n_rff, seed: kernels.HD_stack_power_gaussian_RFF(X, n_rff, seed, scale)
-    algos['HD_2'] =        lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2)
-    algos['HD_3'] =        lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3)
-    algos['fastfood'] =    lambda X, n_rff, seed: kernels.fastfood_RFF(X, n_rff, seed, scale)
+    # algos['HD_2'] =           lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 2)
+    # algos['HD_fix_norm_2'] =  lambda X, n_rff, seed: kernels.HD_fix_norm_RFF(X, n_rff, seed, scale, 2)
+    # algos['HD_3'] =           lambda X, n_rff, seed: kernels.HD_gaussian_RFF(X, n_rff, seed, scale, 3)
+    # algos['HD_fix_norm_3'] =  lambda X, n_rff, seed: kernels.HD_fix_norm_RFF(X, n_rff, seed, scale, 3)
+    # algos['fastfood'] =       lambda X, n_rff, seed: kernels.fastfood_RFF(X, n_rff, seed, scale)
     # algos['greedy'] =    lambda X, n_rff, seed: kernels.greedy_unif_gaussian_RFF(X, n_rff, seed, scale)
-    # for angle in [np.pi/2*0.6, np.pi/2*0.8, np.pi/2*1.2, np.pi/2*1.4]:
-    #     algos['angled_%.3f' % angle] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, angle)
-    #     algos['angled_nb_%.3f' % angle] = lambda X, n_rff, seed: kernels.angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle)
+    # algos['angled_%.3f' % (0.9)]   = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*0.9)
+    # algos['angled_%.3f' % (0.95)]  = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*0.95)
+    # algos['angled_%.3f' % (1)]     = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1)
+    # algos['angled_%.3f' % (1.013)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.013)
+    # algos['angled_%.3f' % (1.025)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.025)
+    # algos['angled_%.3f' % (1.038)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.038)
+    # algos['angled_%.3f' % (1.050)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.050)
+    # algos['angled_%.3f' % (1.063)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.063)
+    # algos['angled_%.3f' % (1.075)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.075)
+    # algos['angled_%.3f' % (1.088)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.088)
+    # algos['angled_%.3f' % (1.100)] = lambda X, n_rff, seed: kernels.angled_gaussian_RFF(X, n_rff, seed, scale, np.pi/2.0*1.100)
+    # algos['angled_nb_%.3f' % angle] = lambda X, n_rff, seed: kernels.angled_gaussian_neighbour_RFF(X, n_rff, seed, scale, angle)
 
-    plt.figure(figsize = (8,6))
+    plt.figure(figsize = (6,4))
     results = {}
-    for algo_name, feature_handle in algos.items():#+[('test', None)]+[('test2', None)]:
+    # for algo_name, feature_handle in algos.items():#+[('test', None)]+[('test2', None)]:
+    algo_keys_plot = ['iid', 'iid_fixed_norm', 'ort', 'ort_weighted', 'ort_fixed_norm', 'ort_fixed_norm_weighted']
+    for algo_name, feature_handle in [(algo_key, algos[algo_key]) for algo_key in algo_keys_plot]:
         results[algo_name] = { }
         for n_rff in range(2, max_n_rff, 2):
             results[algo_name][n_rff] = np.zeros(n_seeds)
             for seed in range(n_seeds):
                 # np.random.seed(n_rff * seed)
-                x = np.random.normal(size = (1, dim))
-                y = np.random.normal(size = (1, dim))
-                true_K = kernels.gaussian_kernel(x, y, scale)
+                vector1 = np.random.normal(size = (1, dim))
+                vector2 = np.random.normal(size = (1, dim))
+                true_K = kernels.gaussian_kernel(vector1, vector2, scale)
                 
                 if algo_name == 'test': # blocks of orthogonal then complete with iid
                     np.random.seed(n_rff * seed)
                     Omega = kernels.stacked_unif_ort((dim, (n_rff / dim) * dim), subsample_all = False)
                     Omega *= np.sqrt(np.random.chisquare(df = Omega.shape[0], size = Omega.shape[1]))
                     Omega = np.concatenate([Omega, np.random.normal(size = (dim, n_rff - Omega.shape[1]))], axis = 1)
-                    est_K = np.mean(np.cos(np.dot(x-y, Omega) / scale))
+                    est_K = np.mean(np.cos(np.dot(vector1 - vector2, Omega) / scale))
                 elif algo_name == 'test2': # always max_n_rff features, n_rff of which are orthogonal, the rest iid
                     np.random.seed(n_rff * seed)
                     Omega = kernels.stacked_unif_ort((dim, n_rff), subsample_all = False)
                     Omega *= np.sqrt(np.random.chisquare(df = Omega.shape[0], size = Omega.shape[1]))
                     Omega = np.concatenate([Omega, np.random.normal(size = (dim, max_n_rff - Omega.shape[1]))], axis = 1)
-                    est_K = np.mean(np.cos(np.dot(x-y, Omega) / scale))
+                    est_K = np.mean(np.cos(np.dot(vector1 - vector2, Omega) / scale))
                 else:
-                    # Phix = feature_handle(x, n_rff, n_rff * seed)
-                    # Phiy = feature_handle(y, n_rff, n_rff * seed)
-                    Phi = feature_handle(np.concatenate([x,y], axis = 0), n_rff, n_rff * seed)
+                    Phi = feature_handle(np.concatenate([vector1, vector2], axis = 0), n_rff, n_rff * seed)
                     est_K = np.real(np.dot(Phi, np.conj(Phi.T)))[0,1]
 
                 results[algo_name][n_rff][seed] = float(est_K - true_K)
@@ -71,22 +84,23 @@ def squared_exponential_kernel():
         print algo_name, np.mean(y[-dim:]), np.mean(counts[-dim:])#, results[algo_name][x[-1]][-10:]
         
         # plt.subplot(121)
-        p = plt.plot(x, y, label = algo_name.replace('_', '\_'))
+        p = plt.plot(x, y, label = algo_name.replace('_', ' '), linewidth = 1)
         high_perc = np.array([np.percentile(np.square(results[algo_name][k]), 95) for k in x])
         # plt.fill_between(x, y, high_perc, color = p[0].get_color(), alpha = 0.05)
         
         # plt.subplot(122)
-        # plt.plot(x, counts, label = algo_name.replace('_', '\_'))
+        # plt.plot(x, counts, label = algo_name.replace('_', ' '))
     # plt.subplot(122)
     # plt.legend()
     # plt.subplot(121)
     plt.yscale('log')
-    # plt.ylim(1e-16)
+    plt.ylim(5e-6, 5e-2)
     plt.legend()
-    plt.title('Pointwise SE kernel approximation error')
-    plt.xlabel('Number of random features')
-    plt.xlim(0, max_n_rff)
-    plt.ylabel('Mean pointwise error in SE kernel')
+    # plt.title('Pointwise SE kernel approximation error')
+    plt.xlabel('Number of random Fourier features')
+    plt.xlim(0, max_n_rff - 1)
+    # plt.ylabel('Mean pointwise error in SE kernel')
+    plt.ylabel('MSE')
     plt.tight_layout()
     plt.savefig('pointwise_SE.eps', bbox_inches = 'tight')
     plt.show()
