@@ -46,14 +46,14 @@ def RFF_from_full_prod(prods, block_size = 1):
         # Now we reduced the problem to weighing two estimators with different variances. We guesstimate from the optimal weights curves that when
         # the second estimator relies on just 1 value, its weighting should be ~~= 0 where as when its block_size then its weight should 
         # be = 1 / (n_blocks in first estimator + 1). In between we interpolate by a quadratic curve because that's what seems to be optimal (run MSE_plot.py)
-        optimal_weight = (float(n_col_last_block) / block_size) ** 2 * 1 / (n_blocks + 1)
+        optimal_weight = (float(n_col_last_block) / block_size) ** 2 / (n_blocks + 1)
         coefficients[:idx_last_block] *= (1.0-optimal_weight)
         coefficients[idx_last_block:] *= optimal_weight
         
     coefficients = np.sqrt(coefficients)
 
     coefficients = np.concatenate([coefficients[np.newaxis, :]] * 2, axis = 1)
-    RFF *= coefficients
+    RFF = np.multiply(RFF, coefficients)
     return RFF
 
 def RFF_from_prod_iid_gaussian_norm(prods, dim, block_size = 1):
