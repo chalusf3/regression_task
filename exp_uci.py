@@ -137,12 +137,14 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     algos = {}
     # RBF kernels
     algos['iid'] =                   lambda raw_feature, n_rff, seed:                         kernels.iid_gaussian_RFF(raw_feature, n_rff, seed, scale)
-    algos['ort'] =                   lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale)
+    algos['ort'] =                   lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, weighted = False)
+    algos['ort_weighted'] =          lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, weighted = True)
     algos['iid_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.iid_fix_norm_RFF(raw_feature, n_rff, seed, scale)
-    algos['ort_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.ort_fix_norm_RFF(raw_feature, n_rff, seed, scale)
-    algos['ort_ss_all'] =            lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, subsample_all = True)
+    algos['ort_fix_norm'] =          lambda raw_feature, n_rff, seed:                         kernels.ort_fix_norm_RFF(raw_feature, n_rff, seed, scale, weighted = False)
+    algos['ort_fix_norm_weighted'] = lambda raw_feature, n_rff, seed:                         kernels.ort_fix_norm_RFF(raw_feature, n_rff, seed, scale, weighted = True)
+    algos['ort_ss_all'] =            lambda raw_feature, n_rff, seed:                         kernels.ort_gaussian_RFF(raw_feature, n_rff, seed, scale, weighted = False, subsample_all = True)
     algos['iid_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.iid_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
-    algos['ort_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(raw_feature, n_rff / 2, seed, scale))
+    algos['ort_anti'] =              lambda raw_feature, n_rff, seed: kernels.make_antithetic(kernels.ort_gaussian_RFF(raw_feature, n_rff / 2, seed, scale, weighted = False))
     algos['HD_1'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 1)
     algos['HD_2'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 2)
     algos['HD_3'] =                  lambda raw_feature, n_rff, seed:                          kernels.HD_gaussian_RFF(raw_feature, n_rff, seed, scale, 3)
@@ -171,9 +173,9 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
 def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
     timing = False
     if timing:
-        n_seeds = 10000
+        n_seeds = 1000
     else:    
-        n_seeds = 50
+        n_seeds = 100
 
     if data_name == 'airq':
         n_rffs = range(4,24 + 1,2) # for squared exponential kernels
@@ -191,7 +193,11 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
             errors['runtimes'][n_rff] = (time.clock() - start_time) / n_seeds
             print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
 
-        filename = 'output/%s_%s_krr.pk' % (data_name, algo_name)
+        if timing:
+            filename = 'output/timing/%s_%s_krr.pk' % (data_name, algo_name)
+        else:
+            filename = 'output/%s_%s_krr.pk' % (data_name, algo_name)
+
         try:
             with open(filename, 'rb') as f:
                 old_errors = pickle.load(f)
@@ -213,16 +219,18 @@ def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y
     elif data_name == 'wine':
         n_rff = 12
 
-    n_seeds = 50
+    n_seeds = 1000
 
     for algo_name, feature_gen_handle in algos.items():
-        errors = []
+        errors = np.zeros(n_seeds)
         start_time = time.clock()
         for seed in range(n_seeds):
-            y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, n_rff, seed))
-            errors.append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
+            y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, n_rff, seed*7))
+            errors[seed] = np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
         runtime = (time.clock() - start_time) / n_seeds
-        print '{} \tn_rff = {} \tmean = {} 5% CI = {} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), np.percentile(errors, [2.5, 97.5]), runtime)
+        del y_test_fit
+        # print '{} n_rff = {} mean = {:.3f} 5% CI = [{:.3}, {:.3}]\t{:.4}sec'.format(algo_name.replace('_', ' ').ljust(24), n_rff, np.mean(errors[n_rff]), np.percentile(errors, 2.5), np.percentile(errors, 97.5), runtime)
+        print '{} & {:.3} & [{:.3}, {:.3}] & {:.5} \\\\'.format(algo_name.replace('_', ' ').replace('fix', 'fixed').ljust(24), np.mean(errors[n_rff]), np.percentile(errors, 2.5), np.percentile(errors, 97.5), runtime)
     
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
     if data_name == 'airq':
@@ -231,7 +239,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
         n_rffs = [4,32] # for squared exponential kernels
     errors = {}
     errors['runtimes'] = {}
-    n_trials = 1
+    n_trials = 10
     start_time = time.clock()
     for _ in range(n_trials):
         y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
@@ -240,13 +248,18 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_gauss_krr.pk' % data_name, 'wb+') as f:
+    if n_trials > 1:
+        filename = 'output/timing/%s_exact_gauss_krr.pk' % data_name
+    else:
+        filename = 'output/%s_exact_gauss_krr.pk' % data_name
+
+    with open(filename, 'wb+') as f:
         pickle.dump(errors, f)
     
     n_rffs = [4,2048]
     errors = {}
     errors['runtimes'] = {}
-    n_trials = 1
+    n_trials = 10
     start_time = time.clock()
     for _ in range(n_trials):
         y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
@@ -255,12 +268,16 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('exponential scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_exp_sp_krr.pk' % data_name, 'wb+') as f:
+    if n_trials > 1:
+        filename = 'output/timing/%s_exact_exp_sp_krr.pk' % data_name
+    else:
+        filename = 'output/%s_exact_exp_sp_krr.pk' % data_name
+    with open(filename, 'wb+') as f:
         pickle.dump(errors, f)
     
     errors = {}
     errors['runtimes'] = {}
-    n_trials = 1
+    n_trials = 10
     start_time = time.clock()
     for _ in range(n_trials):
         y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
@@ -269,7 +286,11 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
     errors[n_rffs[-1]] = errors[n_rffs[0]]
     print '{} \t{} \t{:.4}sec'.format('polynomial scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    with open('output/%s_exact_poly_sp_krr.pk' % data_name, 'wb+') as f:
+    if n_trials > 1:
+        'output/timing/%s_exact_poly_sp_krr.pk' % data_name
+    else:
+        'output/%s_exact_poly_sp_krr.pk' % data_name
+    with open(filename, 'wb+') as f:
         pickle.dump(errors, f)
     
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
@@ -285,7 +306,7 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
         ylim_ticks[1] = max(ylim_ticks[1], np.max(means))
         low_perc = np.array([np.percentile(data[k], 2.5) for k in x])
         high_perc = np.array([np.percentile(data[k], 97.5) for k in x])
-        p = plt.semilogy(x, means, '.-', label = algo_name.replace('_', '\_') )
+        p = plt.semilogy(x, means, '.-', label = algo_name.replace('_', ' ') )
         # plt.fill_between(x, low_perc, high_perc, color = p[0].get_color(), alpha = 0.05)
     
     plt.xlabel(r'\# random features')
@@ -316,17 +337,17 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (8,6))
     # ylim_ticks = [1,0]
     for algo_name in algo_names:
-        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
+        with open('output/timing/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
             data = pickle.load(f)['runtimes']
         n_rffs = data.keys()
         n_rffs.sort()
         runtimes = np.array([data[n_rff] for n_rff in n_rffs])
         # ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
         # ylim_ticks[1] = max(ylim_ticks[0], np.max(means))
-        plt.plot(n_rffs, runtimes, '.-', label = algo_name.replace('_', '\_') )
+        plt.plot(n_rffs, runtimes, '.-', label = algo_name.replace('_', ' ') )
         
     plt.xlabel(r'\# random features')
-    plt.ylabel(r'Average runtime')
+    plt.ylabel(r'Average runtime [s]')
     
     xticks_lim = ((int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2)
     plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
@@ -339,11 +360,38 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     # plt.show()
     plt.clf()
 
-def plot_efficiency(data_name, algo_names, filename = 'regression'):
-    pass
+def plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, algo_handle, algoname = 'regression'):
+    n_rffs = [100]
+    for n_rff in n_rffs:
+        PhiX_train = algo_handle(X_train, n_rff)
+        PhiX_test = algo_handle(X_test, n_rff)
+        beta = krr.lin_reg(PhiX_train, y_train, noise_var)
+        plt.hist(beta, 50)
+        plt.show()
+
 
 def dependence_n_datapoints(data_name, algo_names, filename):
     pass
+
+def plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term):
+    keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
+
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    # regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    # print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+
+    keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys)
+    plot_runtimes(data_name, keys)
+    
+    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','ort_weighted','ort_fix_norm_weighted']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
+    plot_runtimes(data_name, keys, filename = 'iid_ort')
+    
+    keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
+    plot_runtimes(data_name, keys, filename = 'HD')
 
 def main():
     np.random.seed(0)
@@ -353,7 +401,7 @@ def main():
     elif data_name == 'airq':
         X, y = load_air_quality_dataset()
     
-    print data_name, [np.percentile(y, [0, 2.5, 50, 97.5, 100])]
+    print data_name, len(y), [np.percentile(y, [0, 2.5, 50, 97.5, 100])]
 
     X = whiten_data(X)[0]
     X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
@@ -371,25 +419,10 @@ def main():
     inhom_term = 1.0
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
-
-    regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
-
-    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
-
-    regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-
-    plot_regression_errors(data_name, ['exact_gauss'] + keys)
-    plot_runtimes(data_name, keys)
     
-    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
-    plot_runtimes(data_name, keys, filename = 'iid_ort')
-    
-    keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
-    plot_runtimes(data_name, keys, filename = 'HD')
+    plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term)
+
+    # plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, lambda x, n_rff: kernels.ort_gaussian_RFF(x, n_rff, 0, scale), algoname = 'iid')
 
 if __name__ == '__main__':
     main()
