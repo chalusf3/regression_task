@@ -34,8 +34,7 @@ def MSE_ort_weighted(z, n_rff, dim):
     optimal_weight = variance_full_blocks / (variance_full_blocks + variance_partial_block) # estimator = (1-optimal_weight) * full_blocks + optimal_weight * partial_block
     optimal_weight[J==0] = 1
     optimal_weight[I==0] = 0
-    # plt.plot(optimal_weight)
-    # plt.show()
+
     variance = (1.0 - optimal_weight) ** 2 * variance_full_blocks + (optimal_weight) ** 2 * variance_partial_block
     # variance = variance_full_blocks * variance_partial_block / (variance_full_blocks + variance_partial_block)
     
@@ -58,7 +57,6 @@ def MSE_ort_fixed_norm(z, n_rff, dim, fixed_norm):
     bias_cos = np.exp(-z**2 / 2) - mean_fixed_norm(z, dim, fixed_norm)
     var_cos = 0.5 + 0.5 * mean_fixed_norm(z, dim, 2 * fixed_norm) - mean_fixed_norm(z, dim, fixed_norm)**2
     cov_cos = mean_fixed_norm(z, dim, np.sqrt(2) * fixed_norm) - np.square(mean_fixed_norm(z, dim, fixed_norm))
-    print cov_cos
 
     I = np.mod(n_rff, dim, dtype = np.float32)
     J = np.floor(n_rff / dim, dtype = np.float32) # J * dim + I = n_rff
@@ -66,7 +64,7 @@ def MSE_ort_fixed_norm(z, n_rff, dim, fixed_norm):
     # cov_cos = 0 # for quality testing purposes: ort should match iid spot on
 
     variance = (J * (dim * var_cos + dim * (dim - 1) * cov_cos) + I * var_cos + I * (I - 1) * cov_cos) / np.square(n_rff)
-
+    
     return variance + np.square(bias_cos)
 
 def MSE_ort_fixed_norm_weighted(z, n_rff, dim, fixed_norm):
@@ -88,8 +86,38 @@ def MSE_ort_fixed_norm_weighted(z, n_rff, dim, fixed_norm):
 
     variance = (1.0 - optimal_weight) ** 2 * variance_full_blocks + (optimal_weight) ** 2 * variance_partial_block
 
-    print optimal_weight[21:25], I[21:25], J[21:25], variance_full_blocks[21:25], variance_partial_block[21:25], variance[21:25]
     return np.square(bias_cos) + variance
+
+def plot_optimal_weights(z, dims, n_rff):
+    dim = dims[0]
+    I = np.mod(n_rff, dim, dtype = np.float32)
+    J = np.floor(n_rff / dim, dtype = np.float32) # J * dim + I = n_rff
+
+    variance_full_blocks = np.zeros(J.shape)
+    variance_full_blocks[J>0] = MSE_ort(z, J[J>0] * dim, dim)
+    variance_partial_block = np.zeros(I.shape)
+    variance_partial_block[I>0] = MSE_ort(z, I[I>0], dim)
+
+    optimal_weight = variance_full_blocks / (variance_full_blocks + variance_partial_block) # estimator = (1-optimal_weight) * full_blocks + optimal_weight * partial_block
+    optimal_weight[J==0] = 1
+    optimal_weight[I==0] = 0
+
+    plt.figure(figsize = (6,4))
+    index = (0, dim-1)
+    plt.plot(n_rff[index[0]:index[1]], optimal_weight[index[0]:index[1]],               linewidth = 1, color = 'C0', label = r'optimal weighting $\frac{Var[E_1]}{Var[E_1]+Var[E_2]}$')
+    plt.plot(n_rff[index[0]:index[1]], I[index[0]:index[1]] / n_rff[index[0]:index[1]], linewidth = 1, color = 'C1', label = r'naive equal weighting $\frac{I}{k}$')
+    for i in range(1, int(max(n_rff) / dim)):
+        index = (max(0, -1+i*dim), -1+(i+1)*dim)
+        plt.plot(n_rff[index[0]:index[1]], optimal_weight[index[0]:index[1]],               linewidth = 1, color = 'C0')
+        plt.plot(n_rff[index[0]:index[1]], I[index[0]:index[1]] / n_rff[index[0]:index[1]], linewidth = 1, color = 'C1')
+    plt.xlim(0, max(n_rff))
+    plt.ylim(0, 1.05)
+    plt.legend()
+    plt.xlabel('Number of random Fourier features')
+    plt.ylabel('Optimal weight of partial block')
+    plt.tight_layout()
+    plt.savefig('optimal_weight.eps', bbox_inches='tight')
+    plt.show()
 
 def iid_ort(z, dims, n_rffs):
     plt.figure(figsize = (4,3))
@@ -119,8 +147,6 @@ def iid_ort_weighted(z, dims, n_rffs, fixed_norm_handle = None):
     
     plt.plot(n_rffs, MSE_ort_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'ort fixed norm', color = 'C4')
     plt.plot(n_rffs, MSE_ort_fixed_norm_weighted(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'ort fixed norm weighted', color = 'C5')
-        
-    
     
     plt.legend()
     plt.xlim(0, max(n_rffs))
@@ -200,7 +226,6 @@ def iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_handle):
     bias_fixed = np.exp(-z**2 / 2) - mean_fixed_norm(z, dim, fixed_norm)
     plt.plot([np.min(n_rffs), np.max(n_rffs)], np.square([bias_fixed, bias_fixed]), linestyle = '--', linewidth = 1, label = 'Square bias fixed norm d = %d' % dim)
     
-
     plt.xlim(1e-10, max(n_rffs))
     plt.yscale('log')
     plt.ylim(ymax = 2e-3)
@@ -222,9 +247,9 @@ def main():
     n_rffs = np.arange(1, 4*max(dims), dtype = np.float32)
     # iid_ort(z, dims, n_rffs)
     iid_ort_weighted(np.sqrt(2 * 24) / (2.0 * np.sqrt(24)), [24], np.arange(1, 10 * 24 + 1, dtype = np.float32), fixed_norm_mean_chi_sq)
+    # plot_optimal_weights(1, [24], np.arange(1, 10 * 24 + 1, dtype = np.float32))
 
-
-    # dims = [8, 16, 32]
+    dims = [8, 16, 32]
     # bias_fixed_norm(dims, fixed_norm_mean_chi_sq)
     # iid_fixed_norm(dims, fixed_norm_mean_chi_sq)
     # z = 1.25
