@@ -122,8 +122,8 @@ def plot_optimal_weights(z, dims, n_rff):
 def iid_ort(z, dims, n_rffs):
     plt.figure(figsize = (4,3))
     for dim in dims:
-        plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'MSE ort d = %d' % dim)
-    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'MSE iid')
+        plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'ort d = %d' % dim)
+    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'iid')
     
     plt.legend()
     plt.xlim(0, max(n_rffs))
@@ -162,8 +162,8 @@ def iid_ort_fixed_norm(z, dims, n_rffs, fixed_norm_handle):
     plt.figure(figsize = (4,3))
     for dim in dims:
         fixed_norm = fixed_norm_handle(dim)
-        plt.plot(n_rffs, MSE_ort_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'MSE fixed norm ort d = %d' % dim)
-    plt.plot(n_rffs, MSE_iid_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'MSE fixed norm iid')
+        plt.plot(n_rffs, MSE_ort_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'fixed norm ort d = %d' % dim)
+    plt.plot(n_rffs, MSE_iid_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'fixed norm iid')
     
     plt.legend()
     plt.xlim(0, max(n_rffs))
@@ -201,7 +201,7 @@ def iid_fixed_norm(dims, fixed_norm_handle):
     plt.plot(zs, MSE_iid(zs, n_rff), linewidth = 1, label = 'MSE iid')
     for dim in dims:
         fixed_norm = fixed_norm_handle(dim)
-        plt.plot(zs, MSE_iid_fixed_norm(zs, n_rff, dim, fixed_norm), linewidth = 1, label = 'MSE iid fixed norm d = %d' % dim)
+        plt.plot(zs, MSE_iid_fixed_norm(zs, n_rff, dim, fixed_norm), linewidth = 1, label = 'iid fixed norm d = %d' % dim)
     
     plt.legend()
     plt.xlim(0, max(zs))
@@ -217,10 +217,10 @@ def iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_handle):
     plt.figure(figsize = (4,3))
     for dim in dims:
         fixed_norm = fixed_norm_handle(dim)
-        plt.plot(n_rffs, MSE_ort_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'MSE fixed norm ort d = %d' % dim)
-        plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'MSE indep norm ort d = %d' % dim)
-    plt.plot(n_rffs, MSE_iid_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'MSE fixed norm iid')
-    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'MSE indep norm iid')
+        plt.plot(n_rffs, MSE_ort_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'fixed norm ort d = %d' % dim)
+        plt.plot(n_rffs, MSE_ort(z, n_rffs, dim), linewidth = 1, label = 'indep norm ort d = %d' % dim)
+    plt.plot(n_rffs, MSE_iid_fixed_norm(z, n_rffs, dim, fixed_norm), linewidth = 1, label = 'fixed norm iid')
+    plt.plot(n_rffs, MSE_iid(z, n_rffs), linewidth = 1, label = 'indep norm iid')
     
     # lower bound on MSE: squared bias
     bias_fixed = np.exp(-z**2 / 2) - mean_fixed_norm(z, dim, fixed_norm)
