@@ -1,16 +1,14 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.ticker
-import csv, timeit, pickle
-import krr, gpr, kernels
-from datetime import timedelta, datetime
-from collections import defaultdict
 import scipy.linalg as sp_la
 import scipy.special as sp_sp
-import time
+import matplotlib.pyplot as plt
+import matplotlib.ticker
 
-plt.rc('text', usetex=True)
-plt.rc('font', family='serif')
+import csv, timeit, pickle, random, pdb, time, numbers
+import krr, gpr, kernels
+
+from datetime import timedelta, datetime
+from collections import defaultdict
 
 def load_wine_dataset():
     X = np.zeros(shape = (1599, 11))
@@ -72,9 +70,8 @@ def shuffle(X, y):
 
 def split_data(X, y, ratio = 0.8):
     X, y = shuffle(X[:], y[:])
-    
-    train_ratio = 0.8
-    train_count = int(train_ratio * X.shape[0])
+
+    train_count = int(ratio * X.shape[0])
     X_train = X[:train_count]
     y_train = y[:train_count]
     X_test = X[train_count:]
@@ -86,7 +83,10 @@ def whiten_data(X):
     # stds = np.std(X, axis = 0)
     cov_mat = np.cov(X.T)
     X = (X - means)
-    X = np.linalg.solve(sp_la.sqrtm(cov_mat), X.T).T
+    if np.linalg.matrix_rank(cov_mat) == cov_mat.shape[0]:
+        X = np.linalg.solve(sp_la.sqrtm(cov_mat), X.T).T
+    else:
+        X /= np.diag(cov_mat)
     return X, means, cov_mat
 
 def main_axes(X):
@@ -186,10 +186,12 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
         errors = defaultdict(list)
         errors['runtimes'] = defaultdict(list)
         for n_rff in n_rffs:
+            errors[n_rff] = np.zeros(n_seeds)
             start_time = time.clock()
             for seed in range(n_seeds):
                 y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda raw_feature: feature_gen_handle(raw_feature, n_rff, seed))
-                errors[n_rff].append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
+                # errors[n_rff].append(np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0])
+                errors[n_rff][seed] = np.mean(np.abs(y_test - y_test_fit))
             errors['runtimes'][n_rff] = (time.clock() - start_time) / n_seeds
             print '{} {} \t{} \t{:.4}sec'.format(algo_name, n_rff, np.mean(errors[n_rff]), errors['runtimes'][n_rff])
 
@@ -214,6 +216,13 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
     return algos.keys()
 
 def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
+    # Kernel performance (from pickle archive)    
+    with open('output/%s_exact_gauss_krr.pk' % data_name, 'rb') as f:
+        data = pickle.load(f)
+    n_rff = [key for key in data.keys() if isinstance(key, numbers.Number) ][0]
+    print data[n_rff]
+    print '{0} & {1:.3} & [{1:.3}, {1:.3}] & {2:.5} \\\\'.format('exact SE kernel'.ljust(24), data[n_rff][0], data['runtimes'][n_rff])
+
     if data_name == 'airq':
         n_rff = 12
     elif data_name == 'wine':
@@ -225,13 +234,13 @@ def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y
         errors = np.zeros(n_seeds)
         start_time = time.clock()
         for seed in range(n_seeds):
-            y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda a: feature_gen_handle(a, n_rff, seed*7))
+            y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda raw_feature: feature_gen_handle(raw_feature, n_rff, seed))
             errors[seed] = np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
         runtime = (time.clock() - start_time) / n_seeds
         del y_test_fit
         # print '{} n_rff = {} mean = {:.3f} 5% CI = [{:.3}, {:.3}]\t{:.4}sec'.format(algo_name.replace('_', ' ').ljust(24), n_rff, np.mean(errors[n_rff]), np.percentile(errors, 2.5), np.percentile(errors, 97.5), runtime)
         print '{} & {:.3} & [{:.3}, {:.3}] & {:.5} \\\\'.format(algo_name.replace('_', ' ').replace('fix', 'fixed').ljust(24), np.mean(errors[n_rff]), np.percentile(errors, 2.5), np.percentile(errors, 97.5), runtime)
-    
+
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
     if data_name == 'airq':
         n_rffs = [4,24] # for squared exponential kernels
@@ -294,19 +303,19 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
         pickle.dump(errors, f)
     
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
-    plt.figure(figsize = (8,6))
+    plt.figure(figsize = (6,4))
     ylim_ticks = [1,0]
     for algo_name in algo_names:
         with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
             data = pickle.load(f)
-        x = filter(lambda k: isinstance(k, (int, long)), data.keys())
+        x = filter(lambda k: isinstance(k, numbers.Number), data.keys())
         x.sort()
         means = np.array([np.mean(data[k]) for k in x])
         ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
         ylim_ticks[1] = max(ylim_ticks[1], np.max(means))
         low_perc = np.array([np.percentile(data[k], 2.5) for k in x])
         high_perc = np.array([np.percentile(data[k], 97.5) for k in x])
-        p = plt.semilogy(x, means, '.-', label = algo_name.replace('_', ' ') )
+        p = plt.semilogy(x, means, '.-', label = algo_name.replace('_', ' '), linewidth = 1)
         # plt.fill_between(x, low_perc, high_perc, color = p[0].get_color(), alpha = 0.05)
     
     plt.xlabel(r'\# random features')
@@ -369,9 +378,109 @@ def plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, algo
         plt.hist(beta, 50)
         plt.show()
 
+def dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale):
+    n_seeds = 100
+    n_divisions = 15
+    division_ratios = np.linspace(0.1, 0.8, n_divisions)
 
-def dependence_n_datapoints(data_name, algo_names, filename):
-    pass
+    errors = {k: 0.0 for k in division_ratios}
+    errors['runtimes'] = {}
+    for division_ratio in division_ratios:
+        start_time = time.clock()
+        for seed in range(n_seeds):
+            random.seed(seed)
+            X_train, y_train, X_test, y_test = split_data(X, y, ratio = division_ratio)
+            y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+            errors[division_ratio] += np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
+        errors['runtimes'][division_ratio] = (time.clock() - start_time) / n_seeds
+        errors[division_ratio] /= n_seeds
+        print division_ratio, errors[division_ratio]
+    with open('output_dep/%s_exact_gauss_krr.pk' % data_name, 'wb') as f:
+        pickle.dump(errors, f)
+
+def dependence_n_datapoints_rff(data_name, X, y, noise_var, algos):
+    dim = np.prod(X[0].shape)
+    n_rffs = dim / 2 * np.arange(1, 7)
+    print dim, n_rffs
+    n_seeds = 1000
+    n_divisions = 15
+    division_ratios = np.linspace(0.1, 0.8, n_divisions)
+
+    for algo_name, feature_gen_handle in algos.items():
+        errors = {}
+        errors['runtimes'] = {}
+        for n_rff in n_rffs:
+            errors[n_rff] = {k: 0.0 for k in division_ratios}
+            errors['runtimes'][n_rff] = {}
+            for division_ratio in division_ratios:
+                start_time = time.clock()
+                for seed in range(n_seeds):
+                    random.seed(seed)
+                    X_train, y_train, X_test, y_test = split_data(X, y, ratio = division_ratio)
+                    y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda raw_feature: feature_gen_handle(raw_feature, n_rff, seed))
+                    errors[n_rff][division_ratio] += np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
+                errors['runtimes'][n_rff][division_ratio] = (time.clock() - start_time) / n_seeds
+                errors[n_rff][division_ratio] /= n_seeds
+            print algo_name, n_rff, division_ratio, [errors[n_rff][dr] for dr in division_ratios]
+        
+        with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name), 'wb') as f:
+            pickle.dump(errors, f)
+
+def plot_dependence_n_datapoints(data_name, algo_names):
+    plt.figure(figsize = (6,4))
+    # plot the kernel's curve
+    with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
+        data = pickle.load(f)
+    division_ratios = sorted(filter(lambda k: isinstance(k, numbers.Number), data.keys()))
+    plt.plot(division_ratios, [data[dr] for dr in division_ratios], '*-', linewidth = 1, label = 'exact kernel')
+
+    xlim = (min(division_ratios), max(division_ratios))
+
+    # plot the RFF algos curves
+    color_dict = {}
+    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[0:len(algo_names)]):
+        with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
+            data = pickle.load(f)
+        n_rffs = sorted(filter(lambda k: isinstance(k, numbers.Number), data.keys()))
+
+        for n_rff in n_rffs:
+            division_ratios = sorted(filter(lambda k: isinstance(k, numbers.Number), data[n_rff].keys()))
+            if n_rff in color_dict.keys():
+                plt.plot(    division_ratios, [data[n_rff][dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'%s, \# RFF = %d' % (algo_name.replace('_', ' '), n_rff), color = color_dict[n_rff]) 
+            else:
+                p = plt.plot(division_ratios, [data[n_rff][dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'%s, \# RFF = %d' % (algo_name.replace('_', ' '), n_rff))
+                color_dict[n_rff] = p[0].get_color()
+
+        
+        xlim = (min(xlim[0], min(division_ratios)), max(xlim[0], max(division_ratios)))
+    
+    # plt.xlim(xlim)
+    plt.xlabel('Fraction of data used for training')
+    plt.ylabel('Regression error')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('%s_dep_n_datapoints.eps' % data_name)
+    plt.show()
+
+
+    # plot runtimes
+    plt.figure(figsize = (6, 4))
+    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[0:len(algo_names)]):
+        with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
+            data = pickle.load(f)['runtimes']
+        n_rffs = sorted(data.keys())
+        for n_rff in n_rffs:
+            division_ratios = sorted(data[n_rff].keys())
+            if n_rff in color_dict.keys():
+                plt.plot(    division_ratios, [data['runtimes'][n_rff][dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'%s, \# RFF = %d' % (algo_name.replace('_', ' '), n_rff), color = color_dict[n_rff]) 
+            else:
+                print('Something wrong with the color rotation scheme in dependence datapoints runtime plotting')
+    plt.xlabel('Fraction of data used for training')
+    plt.ylabel('Runtime')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('%s_dep_n_datapoints_runtime.eps' % data_name)
+    plt.show()
 
 def plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term):
     keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
@@ -379,23 +488,25 @@ def plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale
 
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     # regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-    # print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
-    keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys)
-    plot_runtimes(data_name, keys)
+    # keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    # plot_regression_errors(data_name, ['exact_gauss'] + keys)
+    # plot_runtimes(data_name, keys)
     
-    keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','ort_weighted','ort_fix_norm_weighted']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
-    plot_runtimes(data_name, keys, filename = 'iid_ort')
+    # keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','ort_weighted','ort_fix_norm_weighted']
+    # plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
+    # plot_runtimes(data_name, keys, filename = 'iid_ort')
     
-    keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
-    plot_runtimes(data_name, keys, filename = 'HD')
+    # keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
+    # plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
+    # plot_runtimes(data_name, keys, filename = 'HD')
 
 def main():
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
     np.random.seed(0)
-    data_name = ['wine', 'airq'][1]
+    data_name = ['wine', 'airq'][0]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -420,7 +531,12 @@ def main():
     
     print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X.shape[1] + degree, degree))
     
-    plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term)
+    # plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term)
+
+    algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
+    # dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale)
+    dependence_n_datapoints_rff(data_name, X, y, noise_var, algos)
+    # plot_dependence_n_datapoints(data_name, algos.keys())
 
     # plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, lambda x, n_rff: kernels.ort_gaussian_RFF(x, n_rff, 0, scale), algoname = 'iid')
 
