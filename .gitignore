@@ -4,6 +4,7 @@ trash*
 .DS_Store
 ._.DS_Store
 *.pk
+datasets/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
