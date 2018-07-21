@@ -26,11 +26,39 @@ def fit_from_feature_gen(X_train, y_train, X_pred, noise_var, feature_gen):
         y_pred = np.dot(np.dot(PhiX_pred, np.conj(PhiX_train.T)), np.linalg.solve(noise_var * np.eye(PhiX_train.shape[0]) + np.dot(PhiX_train, np.conj(PhiX_train.T)), y_train))
     return np.real(y_pred)
 
+"""
+def inv_stoch_cg(A, b, tol = 1e-10, maxiter = 1e6):
+    # solve Ax = b for x by means of conjugate gradient with minibatch iterations
+    x = np.zeros(b.shape)
+    c = 0
+    gradient = np.dot(A, x) - b
+    while(np.linalg.norm(gradient) > tol and c < maxiter):
+        c += 1
+        learning_rate = np.dot(gradient.T, gradient) / np.dot(gradient.T, np.dot(A, gradient))
+        x = x - learning_rate * gradient
+        gradient = np.dot(A, x) - b
+        if c % 1000 == 0:
+            print c, np.linalg.norm(gradient)
+
+    return x
+mat = np.random.normal(size = (1000, 1000))*10
+mat = np.eye(mat.shape[0]) + np.dot(mat, mat.T)
+rhs = np.random.normal(size = (mat.shape[0], 1))
+print 'start iter'
+sol1 = np.dot(mat, inv_stoch_cg(mat, rhs)) - rhs
+print 'stop  iter'
+print 'start exact'
+sol2 = np.dot(mat, np.linalg.solve(mat, rhs)) - rhs
+print 'stop  exact'
+print sol1, sol2
+"""
+
 def fit_from_kernel_gen(X_train, y_train, X_pred, noise_var, kernel_gen):
     # fits X_pred against the model y_train = feature_gen(X_train) * beta + N(0, noise_var) with a N(0,I) prior on beta
     # where kernel_gen(x,y) = <feature_gen(x), feature_gen(y)>
     K_train = kernel_gen(X_train, X_train)
     K_pred = kernel_gen(X_pred, X_train)
 
-    y_pred = np.dot(K_pred, np.linalg.solve(noise_var * np.eye(K_train.shape[0]) + K_train, y_train))    
+    K_inv_y = np.linalg.solve(noise_var * np.eye(K_train.shape[0]) + K_train, y_train)
+    y_pred = np.dot(K_pred, K_inv_y)    
     return y_pred
