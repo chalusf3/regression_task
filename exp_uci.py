@@ -393,17 +393,18 @@ def plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, algo
         plt.show()
 
 def dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale):
-    n_seeds = 100
-    n_divisions = 15
-    division_ratios = np.linspace(0.1, 0.8, n_divisions)
-
+    n_seeds = 10
+    n_divisions = 10
+    division_ratios = np.linspace(0.1, 1.0, n_divisions)
+    # division_ratios += [0.15, 0.25]
+    X_train_all, y_train_all, X_test, y_test = split_data(X, y, ratio = 0.8)
     errors = {k: 0.0 for k in division_ratios}
     errors['runtimes'] = {}
     for division_ratio in division_ratios:
         start_time = time.clock()
         for seed in range(n_seeds):
             random.seed(seed)
-            X_train, y_train, X_test, y_test = split_data(X, y, ratio = division_ratio)
+            X_train, y_train, _, _ = split_data(X_train_all, y_train_all, ratio = division_ratio)
             y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
             errors[division_ratio] += np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
         errors['runtimes'][division_ratio] = (time.clock() - start_time) / n_seeds
@@ -416,13 +417,14 @@ def dependence_n_datapoints_rff(data_name, X, y, noise_var, algos):
     dim = np.prod(X[0].shape)
     if data_name != 'MSD':
         n_rffs = dim / 2 * np.arange(1, 7)
+        n_rffs = n_rffs[1::2]
         n_seeds = 5000
     else:
         n_seeds = 10
-        n_rffs = np.arange(100, 1+2000, 100)
+        n_rffs = np.arange(1000, 0, -500)
     print dim, n_rffs
-    n_divisions = 15
-    division_ratios = np.linspace(0.1, 0.8, n_divisions)
+    n_divisions = 10
+    division_ratios = np.linspace(0.1, 1.0, n_divisions)
 
     X_train_all, y_train_all, X_test, y_test = split_data(X, y, ratio = 0.8)
 
@@ -437,7 +439,7 @@ def dependence_n_datapoints_rff(data_name, X, y, noise_var, algos):
                 for seed in range(n_seeds):
                     random.seed(seed)
                     np.random.seed(seed)
-                    X_train, y_train, _, _ = split_data(X_train_all, y_train_all, ratio = division_ratio / 0.8)
+                    X_train, y_train, _, _ = split_data(X_train_all, y_train_all, ratio = division_ratio)
 
                     y_test_fit = krr.fit_from_feature_gen(X_train, y_train, X_test, noise_var, lambda raw_feature: feature_gen_handle(raw_feature, n_rff, seed))
                     errors[n_rff][division_ratio] += np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]
@@ -449,15 +451,12 @@ def dependence_n_datapoints_rff(data_name, X, y, noise_var, algos):
 
 def plot_dependence_n_datapoints(data_name, algo_names):
     plt.figure(figsize = (6,4))
-    xlim = (0, 1e10)
     if data_name != 'MSD':
         # plot the kernel's curve
         with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
             data = pickle.load(f)
         division_ratios = sorted(filter(lambda k: isinstance(k, numbers.Number), data.keys()))
         plt.plot(division_ratios, [data[dr] for dr in division_ratios], '*-', linewidth = 1, label = 'exact kernel')
-
-        xlim = (min(division_ratios), max(division_ratios))
 
     # plot the RFF algos curves
     color_dict = {}
@@ -474,9 +473,7 @@ def plot_dependence_n_datapoints(data_name, algo_names):
                 p = plt.plot(division_ratios, [data[n_rff][dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'%s, \# RFF = %d' % (algo_name.replace('_', ' '), n_rff))
                 color_dict[n_rff] = p[0].get_color()
 
-        xlim = (min(xlim[0], min(division_ratios)), max(xlim[1], max(division_ratios)))
-        
-    # plt.xlim(xlim)
+    plt.xlim([0, 1])
     plt.xlabel('Fraction of data used for training')
     plt.ylabel('Regression error')
     plt.legend()
@@ -490,20 +487,32 @@ def plot_dependence_n_datapoints(data_name, algo_names):
         with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
             data = pickle.load(f)['runtimes']
         n_rffs = sorted(data.keys())
-        for n_rff in n_rffs:
+        for n_rff in n_rffs:#[1::2]:
             division_ratios = sorted(data[n_rff].keys())
             if n_rff in color_dict.keys():
                 plt.plot(division_ratios, [data[n_rff][dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'%s, \# RFF = %d' % (algo_name.replace('_', ' '), n_rff), color = color_dict[n_rff]) 
             else:
                 print('Something wrong with the color rotation scheme in dependence datapoints runtime plotting')
-    # with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
-    #     data = pickle.load(f)['runtimes']
-    # division_ratios = sorted(data.keys())
-    # plt.plot(division_ratios, [data[dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'exact SE kernel')
-    plt.xlabel('Fraction of data used for training')
+    if data_name != 'MSD':
+        with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
+            data = pickle.load(f)['runtimes']
+        division_ratios = sorted(data.keys())
+        plt.plot(division_ratios, [data[dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'exact SE kernel')
+    plt.xlabel('Fraction of training data used for training')
     plt.ylabel('Runtime [s]')
-    plt.ylim(0)
-    plt.legend()
+    
+    asymptotics_x = np.linspace(min(division_ratios), max(division_ratios))
+    plt.plot(asymptotics_x, 0.2e4*np.power(asymptotics_x, 1), '.', linewidth = 1, markersize = 1, label = r'$O(x)$')
+    # plt.plot(asymptotics_x, 1e3*np.power(asymptotics_x, 2), '.', linewidth = 1, markersize = 1, label = r'$O(x^2)$')
+
+    # plt.ylim(0)
+    plt.xlim([0.1,1])
+    plt.yscale('log')
+    # plt.xscale('log')
+    if data_name != 'MSD':
+        plt.legend(loc='upper right', bbox_to_anchor=(0.95, 0.9))
+    else:
+        plt.legend()
     plt.tight_layout()
     plt.savefig('%s_dep_n_datapoints_runtime.eps' % data_name)
     plt.show()
