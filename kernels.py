@@ -140,7 +140,7 @@ def unif_ort_QR(dim):
 # plt.hist(S, 100)
 # plt.show()
 
-def stacked_unif_ort(shape, subsample_all):
+def stacked_unif_ort(shape, subsample_all = False):
     # generates a matrix with shape[1] orthonormal columns of dimension shape[0]
     G = [unif_ort_QR(shape[0]) for _ in range(1 + shape[1] / shape[0])] # int(np.ceil(float(shape[1]) / shape[0]))
     G = np.concatenate(G, axis = 1) # TODO: create a 2nd version which couples the gaussians here? 
@@ -608,11 +608,16 @@ def iid_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 
     if inhom_term != 0:
         X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
 
+    # np.random.seed(seed)
+    # iid_freq = np.random.normal(size = (X.shape[1], n_features * degree))
+    # PhiX = np.dot(X, iid_freq)
+    # PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    # PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
     np.random.seed(seed)
-    iid_freq = np.random.normal(size = (X.shape[1], n_features * degree))
-    PhiX = np.dot(X, iid_freq)
-    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        PhiX = PhiX * np.dot(X, np.random.normal(size = (X.shape[1], n_features)))
+    PhiX /= np.sqrt(n_features)
     
     return PhiX
 # Phi = iid_polynomial_sp_random_features(np.eye(4), 10000, 0, 1, inhom_term = 0)
@@ -628,12 +633,18 @@ def iid_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_te
     dim = X.shape[1]
 
     np.random.seed(seed)
-    iid_freq = np.random.normal(size = (dim, n_features * degree))
-    iid_freq /= np.linalg.norm(iid_freq, axis = 0)[np.newaxis, :]
-    iid_freq *= np.sqrt(dim)
-    PhiX = np.dot(X, iid_freq)
-    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    # iid_freq = np.random.normal(size = (dim, n_features * degree))
+    # iid_freq /= np.linalg.norm(iid_freq, axis = 0)[np.newaxis, :]
+    # # iid_freq *= np.sqrt(dim)
+    # PhiX = np.dot(X, iid_freq)
+    # PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    # PhiX = np.concatenate(PhiX, axis = 1) * np.sqrt(dim**degree / n_features)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        freqs = np.random.normal(size = (dim, n_features))
+        freqs = freqs / np.linalg.norm(freqs, axis = 0)[np.newaxis, :]
+        PhiX = PhiX * np.dot(X, freqs) * np.sqrt(dim)
+    PhiX /= np.sqrt(n_features)
 
     return PhiX
 
@@ -641,16 +652,21 @@ def ort_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_te
     """
     generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random orthonormal projections
     """
-    if inhom_term != 0:
+    if inhom_term != 0.0:
         X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
     
     dim = X.shape[1]
 
     np.random.seed(seed)
-    ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
-    PhiX = np.dot(X, ort_freq) * np.sqrt(dim)
-    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        freqs = stacked_unif_ort((dim, n_features), subsample_all = False)
+        PhiX = PhiX * np.dot(X, freqs) * np.sqrt(dim)
+    PhiX /= np.sqrt(n_features)
+    # ort_freq = np.concatenate([stacked_unif_ort((dim, n_features), subsample_all = False) for _ in range(degree)], axis = 1)
+    # PhiX = np.dot(X, ort_freq) * np.sqrt(dim)
+    # PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    # PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
 
     return PhiX
 
@@ -664,14 +680,20 @@ def ort_polynomial_sp_random_gaussian_features(X, n_features, seed, degree, inho
     dim = X.shape[1]
 
     np.random.seed(seed)
-    ort_freq = np.concatenate([stacked_unif_ort((dim, n_features)) for _ in range(degree)], axis = 1)
-    ort_freq *= np.sqrt(np.random.chisquare(df = dim, size = (1, degree * n_features)))
-    PhiX = np.dot(X, ort_freq)# * np.sqrt(dim)
-    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        freqs = stacked_unif_ort((dim, n_features), subsample_all = False)
+        freqs *= np.sqrt(np.random.chisquare(df = dim, size = (1, n_features)))
+        PhiX = PhiX * np.dot(X, freqs)
+    PhiX /= np.sqrt(n_features)
+    # np.random.seed(seed)
+    # ort_freq = np.concatenate([stacked_unif_ort((dim, n_features), subsample_all = False) for _ in range(degree)], axis = 1)
+    # ort_freq *= np.sqrt(np.random.chisquare(df = dim, size = (1, degree * n_features)))
+    # PhiX = np.dot(X, ort_freq)# * np.sqrt(dim)
+    # PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
+    # PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
 
     return PhiX
-
 
 def HD_polynomial_sp_random_unit_features(X, n_features, seed, degree, inhom_term = 0):
     """
