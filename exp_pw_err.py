@@ -108,38 +108,45 @@ def squared_exponential_kernel():
 def polynomial_kernel():
     dim = 24
     scale = np.sqrt(dim)
-    n_seeds = 100
-    max_n_f = 20 * dim + 1
+    n_seeds = 1000
+    max_n_rf = 5 * dim + 1
     degree = 2
     inhom_term = 0.0
-    exact_feat_dim = comb(dim + (inhom_term != 0) + degree, degree)
+    exact_feat_dim = comb(dim + (inhom_term != 0.0) + degree, degree)
     print 'Dimension of exact feature space = %d' % exact_feat_dim
     algos = {}
-    algos['iid_unit'] = lambda X, n_f, seed_arg:     kernels.iid_polynomial_sp_random_unit_features(X, n_f, seed_arg, degree, inhom_term)
-    algos['ort_unit'] = lambda X, n_f, seed_arg:     kernels.ort_polynomial_sp_random_unit_features(X, n_f, seed_arg, degree, inhom_term)
-    algos['iid'] =      lambda X, n_f, seed_arg:          kernels.iid_polynomial_sp_random_features(X, n_f, seed_arg, degree, inhom_term)
-    algos['ort'] =      lambda X, n_f, seed_arg: kernels.ort_polynomial_sp_random_gaussian_features(X, n_f, seed_arg, degree, inhom_term)
-    # algos['HD_unit'] =  lambda X, n_f, seed_arg:      kernels.HD_polynomial_sp_random_unit_features(X, n_f, seed_arg, degree, inhom_term)
+    algos['iid_unit'] =     lambda X, n_rf, seed:     kernels.iid_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
+    algos['ort_unit'] =     lambda X, n_rf, seed:     kernels.ort_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
+    algos['iid'] =          lambda X, n_rf, seed:          kernels.iid_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['ort'] =          lambda X, n_rf, seed: kernels.ort_polynomial_sp_random_gaussian_features(X, n_rf, seed, degree, inhom_term)
+    algos['discrete_iid'] = lambda X, n_rf, seed:     kernels.discrete_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['HD'] =           lambda X, n_rf, seed:           kernels.HD_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
     plt.figure(figsize = (6,4))
     results = {}
-    algo_keys_plot = ['iid', 'ort', 'iid_unit', 'ort_unit']
+    algo_keys_plot = ['iid', 'iid_unit', 'ort_unit', 'discrete_iid', 'HD']
+    colors = ['C0', 'C1', 'C2']
     for algo_name, feature_handle in [(algo_key, algos[algo_key]) for algo_key in algo_keys_plot]:
         results[algo_name] = { }
-        for n_f in range(2, max_n_f, 2):
-            results[algo_name][n_f] = np.zeros(n_seeds)
+        for n_rf in range(2, max_n_rf, 2):
+            results[algo_name][n_rf] = np.zeros(n_seeds)
             for seed in range(n_seeds):
                 np.random.seed(seed)
-                vector1 = np.random.normal(size = (1, dim)) / scale
-                vector2 = np.random.normal(size = (1, dim)) / scale
+                vector1 = np.random.normal(size = (1, dim))# / scale
+                vector1 /= np.linalg.norm(vector1)
+                vector2 = np.random.normal(size = (1, dim))# / scale
+                vector2 /= np.linalg.norm(vector2)
+                # make vector1 and vector2 be at a certain angle
+                dp = 0.9
+                vector2 = (dp - np.dot(vector1, vector2.T)) / (1 - np.dot(vector1, vector2.T)) * vector1 + (1.0 - dp) / (1 - np.dot(vector1, vector2.T)) * vector2
 
                 true_K = kernels.polynomial_sp_kernel(vector1, vector2, degree, inhom_term)
 
-                Phi = feature_handle(np.concatenate([vector1, vector2], axis = 0), n_f, seed)
+                Phi = feature_handle(np.concatenate([vector1, vector2], axis = 0), n_rf, seed)
                 est_K = np.dot(Phi, Phi.T)[0,1]
                 
-                results[algo_name][n_f][seed] = float(est_K - true_K)
+                results[algo_name][n_rf][seed] = float(est_K - true_K)
 
-            # print '%d\t%.6f\t%.3f\t%.6f' % (n_f, est_K, true_K, float(est_K - true_K))
+            # print '%d\t%.6f\t%.3f\t%.6f' % (n_rf, est_K, true_K, float(est_K - true_K))
         x = np.array(sorted(results[algo_name].keys()))
         y = np.array([np.mean(np.square(results[algo_name][k])) for k in x])
         counts = np.array([np.sum(results[algo_name][k]>0) for k in x])
@@ -148,10 +155,11 @@ def polynomial_kernel():
         # stds = np.array([np.std(results[algo_name][k]) for k in x])
         # plt.fill_between(x, y - stds, y + stds, color = p[0].get_color(), alpha = 0.05)
     plt.yscale('log')
-    plt.ylim(ymin = 1e-6)
+    # plt.ylim(ymin = max(plt.ylim()[0], 1e-6))
+    plt.ylim(1e-2, 3e0)
     plt.legend()
     plt.xlabel('Number of random features')
-    plt.xlim(0, max_n_f - 1)
+    plt.xlim(0, max_n_rf - 1)
     plt.ylabel('MSE')
     plt.plot([exact_feat_dim] * 2, plt.gca().get_ylim(),'-', linewidth = 1)
     plt.tight_layout()
