@@ -702,16 +702,10 @@ def HD_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0
     dim = X.shape[1]
 
     np.random.seed(seed)
-    # PhiX = np.ones((X.shape[0], n_features))
-    # for _ in range(degree):
-    #     freqs = stacked_hadamard_rademacher(np.eye(dim), n_features, 1)
-    #     PhiX = PhiX * np.dot(X, freqs)
-    #     # PhiX = PhiX * stacked_hadamard_rademacher(X, n_features, 1)
-    # PhiX /= np.sqrt(n_features)
-    HD_freq = np.concatenate([stacked_hadamard_rademacher(np.eye(dim), n_features, 1) for _ in range(degree)], axis = 1)
-    PhiX = np.dot(X, HD_freq) * np.sqrt(dim)
-    PhiX = [np.matrix(np.prod(PhiX[:, l::n_features], axis = 1)).T for l in range(n_features)]
-    PhiX = np.concatenate(PhiX, axis = 1) / np.sqrt(n_features)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        PhiX = PhiX * stacked_hadamard_rademacher(X, n_features, 1) * np.sqrt(dim)
+    PhiX /= np.sqrt(n_features)
     
     return PhiX
 
