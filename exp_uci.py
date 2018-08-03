@@ -100,7 +100,8 @@ def whiten_data(X):
         X = np.linalg.solve(sp_la.sqrtm(cov_mat), X.T).T
     else:
         print('/!\\ whitening: covariance matrix is singular')
-        X /= np.diag(cov_mat)
+        variances = np.diag(cov_mat)
+        X[:, variances > 0] /= variances[variances > 0]
     return X, means, cov_mat
 
 def main_axes(X):
@@ -175,11 +176,13 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     algos['fastfood'] =              lambda raw_feature, n_rff, seed:                             kernels.fastfood_RFF(raw_feature, n_rff, seed, scale)
 
     # Dot product kernels
-    algos['iid_polyn'] =             lambda raw_feature, n_rff, seed:        kernels.iid_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
-    algos['ort_polyn'] =             lambda raw_feature, n_rff, seed:   kernels.ort_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
-    algos['HD_polyn'] =              lambda raw_feature, n_rff, seed:    kernels.HD_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
-    algos['iid_polynomial_sp'] =     lambda raw_feature, n_rff, seed:        kernels.iid_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
-    algos['iid_exponential_sp'] =    lambda raw_feature, n_rff, seed:       kernels.iid_exponential_sp_random_features(raw_feature, n_rff, seed, scale)
+    algos['iid_polyn'] =             lambda raw_feature, n_rff, seed:           kernels.iid_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['iid_unit_polyn'] =        lambda raw_feature, n_rff, seed:      kernels.iid_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['ort_polyn'] =             lambda raw_feature, n_rff, seed:      kernels.ort_polynomial_sp_random_unit_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['discrete_polyn'] =        lambda raw_feature, n_rff, seed:      kernels.discrete_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['HD_polyn'] =              lambda raw_feature, n_rff, seed:            kernels.HD_polynomial_sp_random_features(raw_feature, n_rff, seed, degree, inhom_term)
+    algos['HD_downsample_polyn'] =   lambda raw_feature, n_rff, seed: kernels.HD_polynomial_sp_random_features_downsample(raw_feature, n_rff, seed, degree, inhom_term)
+    # algos['iid_exponential_sp'] =    lambda raw_feature, n_rff, seed:       kernels.iid_exponential_sp_random_features(raw_feature, n_rff, seed, scale)
 
     algos = {k: algos[k] for k in keys}
     return algos
@@ -189,13 +192,20 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
     if timing:
         n_seeds = 1000
     else:    
-        n_seeds = 100
+        n_seeds = 50
+
+    polynomial_kernel = 'iid_polyn' in algos.keys()
 
     if data_name == 'airq':
-        n_rffs = range(4,24 + 1,2) # for squared exponential kernels
+        if polynomial_kernel:
+            n_rffs = range(12, 288 + 1, 12)
+        else:
+            n_rffs = range(4,24 + 1,2) # for squared exponential kernels
     elif data_name == 'wine':
-        n_rffs = range(4,32 + 1,2) # for squared exponential kernels
-    # n_rffs = [4,8,16,24,40,56,88,104,128,156,188,220,256,320,384,448,512,640] # np.power(2, np.arange(2, 11)) # for polynomial kernels
+        if polynomial_kernel:
+            n_rffs = range(12, 144 + 1, 12)
+        else:                
+            n_rffs = range(4,32 + 1,2) # for squared exponential kernels
     for algo_name, feature_gen_handle in algos.items():
         errors = defaultdict(list)
         errors['runtimes'] = defaultdict(list)
@@ -229,7 +239,7 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
             
     return algos.keys()
 
-def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
+def print_average_regression_error_SE(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
     # Kernel performance (from pickle archive)    
     with open('output/%s_exact_gauss_krr.pk' % data_name, 'rb') as f:
         data = pickle.load(f)
@@ -279,7 +289,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     with open(filename, 'wb+') as f:
         pickle.dump(errors, f)
     
-    n_rffs = [4,2048]
+    n_rffs = [4,144]
     errors = {}
     errors['runtimes'] = {}
     n_trials = 10
@@ -298,6 +308,7 @@ def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_v
     with open(filename, 'wb+') as f:
         pickle.dump(errors, f)
     
+    n_rffs = [4,144]
     errors = {}
     errors['runtimes'] = {}
     n_trials = 10
@@ -337,30 +348,42 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.ylabel(r'Average regression error')
     # plt.yscale('log')
 
+    polynomial_kernel = 'iid_polyn' in algo_names
+
     if data_name == 'wine':
-        yticks_spacing = 2.5e-2 # space between y ticks
+        if polynomial_kernel:
+            yticks_spacing = 5e-1 # space between y ticks
+            xticks_spacing = 12
+        else:
+            yticks_spacing = 2.5e-2 # space between y ticks
+            xticks_spacing = 2
     elif data_name == 'airq':
-        yticks_spacing = 5e-2 # space between y ticks
+        if polynomial_kernel:
+            yticks_spacing = 5e-2
+            xticks_spacing = 12
+        else:
+            yticks_spacing = 5e-2 # space between y ticks
+            xticks_spacing = 2
 
     yticks_lim_integer = (1 + int(ylim_ticks[0] / yticks_spacing), int(ylim_ticks[1] / yticks_spacing)) # floor and ceil
     plt.minorticks_off()
     plt.yticks(yticks_spacing * np.arange(yticks_lim_integer[0], 1 + yticks_lim_integer[1]))
     plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.2f'))
 
-    xticks_lim = [(int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2]
-    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
+    xticks_lim = [(int(min(plt.xticks()[0]) / xticks_spacing) + 1) * xticks_spacing, int(max(plt.xticks()[0]) / xticks_spacing) * xticks_spacing]
+    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, xticks_spacing))
 
     plt.legend()
     plt.tight_layout()
     plt.savefig('%s_%s.eps' % (data_name, filename))
-    # plt.show()
+    plt.show()
     plt.clf()
 
 def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (8,6))
     # ylim_ticks = [1,0]
     for algo_name in algo_names:
-        with open('output/timing/%s_%s_krr.pk' % (data_name, algo_name), 'rb') as f:
+        with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
             data = pickle.load(f)['runtimes']
         n_rffs = data.keys()
         n_rffs.sort()
@@ -372,17 +395,46 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.xlabel(r'\# random features')
     plt.ylabel(r'Average runtime [s]')
     
-    xticks_lim = ((int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2)
-    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
+    if data_name in ['wine', 'airq', 'MSD']:
+        xticks_spacing = 2
+    else:
+        xticks_spacing = 24
+    xticks_lim = ((int(min(plt.xticks()[0]) / xticks_spacing) + 1) * xticks_spacing, int(max(plt.xticks()[0]) / xticks_spacing) * xticks_spacing)
+    plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, xticks_spacing))
     
     plt.ylim(0)
+    plt.xlim(0)
 
     plt.legend()
     plt.tight_layout()
     plt.savefig('runtime_%s_%s.eps' % (data_name, filename))
-    # plt.show()
-    plt.clf()
+    plt.show()
 
+    plt.figure(figsize = (8,6))
+    for algo_name in algo_names:
+        with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
+            data = pickle.load(f)
+        n_rffs = filter(lambda k: isinstance(k ,numbers.Number), data.keys())
+        n_rffs.sort()
+        runtimes = np.array([data['runtimes'][n_rff] for n_rff in n_rffs])
+        regr_errors = np.array([np.mean(data[n_rff]) for n_rff in n_rffs])
+        # ylim_ticks[0] = min(ylim_ticks[0], np.min(means))
+        # ylim_ticks[1] = max(ylim_ticks[0], np.max(means))
+        # print regr_errors, runtimes
+        plt.plot(runtimes, regr_errors, '.-', label = algo_name.replace('_', ' ') )
+        
+    plt.xlabel(r'Average runtime [s]')
+    plt.ylabel(r'Regression error')
+    
+    # xticks_lim = ((int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2)
+    # plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
+    # plt.ylim(0)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('runtime_%s_%s_alt.eps' % (data_name, filename))
+    plt.show()
+
+"""
 def plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, algo_handle, algoname = 'regression'):
     n_rffs = [100]
     for n_rff in n_rffs:
@@ -391,7 +443,7 @@ def plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, algo
         beta = krr.lin_reg(PhiX_train, y_train, noise_var)
         plt.hist(beta, 50)
         plt.show()
-
+"""
 def dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale):
     n_seeds = 10
     n_divisions = 10
@@ -517,53 +569,43 @@ def plot_dependence_n_datapoints(data_name, algo_names):
     plt.savefig('%s_dep_n_datapoints_runtime.eps' % data_name)
     plt.show()
 
-    """
-    color_dict = {}
-    plt.figure(figsize = (6, 4))
-    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[0:len(algo_names)]):
-        with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
-            data = pickle.load(f)['runtimes']
-        n_rffs = sorted(data.keys())
-        division_ratios = sorted(data[n_rff].keys())
-        for dr in filter(lambda dr: np.allclose(np.round(dr / 0.2), dr / 0.2), division_ratios):
-            if dr in color_dict.keys():
-                plt.plot(n_rffs, [data[n_rff][dr] for n_rff in n_rffs], marker = marker, markersize = 4, linewidth = 1, label = r'%s, fraction data = %.3f' % (algo_name.replace('_', ' '), dr), color = color_dict[dr])
-            else:
-                p = plt.plot(n_rffs, [data[n_rff][dr] for n_rff in n_rffs], marker = marker, markersize = 4, linewidth = 1, label = r'%s, fraction data = %.3f' % (algo_name.replace('_', ' '), dr))
-                color_dict[dr] = p[0].get_color()
-    plt.xlabel(r'\# RFF')
-    plt.ylabel('Runtime [s]')
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('%s_dep_n_datapoints_runtime_rff.eps' % data_name)
-    plt.show()
-    """
-
-def plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term):
+def plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, scale):
     keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
-    algos = algos_generator(keys, scale = scale, degree = degree, inhom_term = inhom_term)
+    algos = algos_generator(keys, scale = scale, degree = None, inhom_term = None)
 
-    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    ### regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     # regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    # print_average_regression_error_SE(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
     # keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     # plot_regression_errors(data_name, ['exact_gauss'] + keys)
-    # plot_runtimes(data_name, keys)
+    plot_runtimes(data_name, [key + '_krr' for key in keys])
     
     # keys = ['iid','ort','iid_fix_norm','ort_fix_norm','ort_ss_all','ort_weighted','ort_fix_norm_weighted']
     # plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'iid_ort')
-    # plot_runtimes(data_name, keys, filename = 'iid_ort')
+    plot_runtimes(data_name, [key + '_krr' for key in keys], filename = 'iid_ort')
     
     # keys = ['ort', 'ort_fix_norm','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     # plot_regression_errors(data_name, ['exact_gauss'] + keys, filename = 'HD')
-    # plot_runtimes(data_name, keys, filename = 'HD')
+    plot_runtimes(data_name, [key + '_krr' for key in keys], filename = 'HD')
+
+    plot_runtimes(data_name, [key + '_krr' for key in ['iid', 'ort_weighted']], filename = 'iid+ort_weighted')
+
+def plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term):
+    keys = ['iid_polyn', 'iid_unit_polyn', 'ort_polyn', 'discrete_polyn', 'HD_polyn']
+    algos = algos_generator(keys, scale = None, degree = degree, inhom_term = inhom_term)
+
+    # print_average_regression_error_polyn(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+
+    plot_regression_errors(data_name, ['exact_poly_sp'] + keys, filename = 'polyn')
+    # plot_runtimes(data_name, keys)
 
 def main():
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
     np.random.seed(0)
-    data_name = ['wine', 'airq', 'MSD'][2]
+    data_name = ['wine', 'airq', 'MSD'][0]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -577,17 +619,17 @@ def main():
     noise_var = 1.0
     if data_name == 'wine' or data_name == 'airq':
         scale = 16.0
-        degree = 3
+        degree = 2
         inhom_term = 1.0
     elif data_name == 'MSD':
         scale = 300.0
         degree = 3
         inhom_term = 1.0
 
-    algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
     # dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale)
+    algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
     # dependence_n_datapoints_rff(data_name, X, y, noise_var, algos)
-    plot_dependence_n_datapoints(data_name, algos.keys())
+    # plot_dependence_n_datapoints(data_name, algos.keys())
 
     if data_name == 'wine' or data_name == 'airq':
         X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
@@ -601,7 +643,9 @@ def main():
     
     # print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X_train.shape[1] + degree, degree))
     
-    # plotting_error(X_train, y_train, X_test, y_test, data_name, noise_var, scale, degree, inhom_term)
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
+    plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, scale)
+    # plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term)
 
     # plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, lambda x, n_rff: kernels.ort_gaussian_RFF(x, n_rff, 0, scale), algoname = 'iid')
 
