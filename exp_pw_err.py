@@ -107,24 +107,24 @@ def squared_exponential_kernel():
 
 def polynomial_kernel():
     dim = 24
-    scale = np.sqrt(dim)
-    n_seeds = 1000
+    # scale = np.sqrt(dim)
+    n_seeds = 5000
     max_n_rf = 5 * dim + 1
     degree = 2
     inhom_term = 0.0
     exact_feat_dim = comb(dim + (inhom_term != 0.0) + degree, degree)
     print 'Dimension of exact feature space = %d' % exact_feat_dim
     algos = {}
-    algos['iid_unit'] =     lambda X, n_rf, seed:     kernels.iid_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
-    algos['ort_unit'] =     lambda X, n_rf, seed:     kernels.ort_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
-    algos['iid'] =          lambda X, n_rf, seed:          kernels.iid_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
-    algos['ort'] =          lambda X, n_rf, seed: kernels.ort_polynomial_sp_random_gaussian_features(X, n_rf, seed, degree, inhom_term)
-    algos['discrete_iid'] = lambda X, n_rf, seed:     kernels.discrete_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
-    algos['HD'] =           lambda X, n_rf, seed:           kernels.HD_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['iid_unit'] =      lambda X, n_rf, seed:      kernels.iid_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
+    algos['ort_unit'] =      lambda X, n_rf, seed:      kernels.ort_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
+    algos['iid'] =           lambda X, n_rf, seed:           kernels.iid_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['ort'] =           lambda X, n_rf, seed:  kernels.ort_polynomial_sp_random_gaussian_features(X, n_rf, seed, degree, inhom_term)
+    algos['discrete_iid'] =  lambda X, n_rf, seed:      kernels.discrete_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['HD'] =            lambda X, n_rf, seed:            kernels.HD_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['HD_downsample'] = lambda X, n_rf, seed: kernels.HD_polynomial_sp_random_features_downsample(X, n_rf, seed, degree, inhom_term)
     plt.figure(figsize = (6,4))
     results = {}
-    algo_keys_plot = ['iid', 'iid_unit', 'ort_unit', 'discrete_iid', 'HD']
-    colors = ['C0', 'C1', 'C2']
+    algo_keys_plot = ['iid', 'iid_unit', 'ort_unit', 'discrete_iid', 'HD', 'HD_downsample']
     for algo_name, feature_handle in [(algo_key, algos[algo_key]) for algo_key in algo_keys_plot]:
         results[algo_name] = { }
         for n_rf in range(2, max_n_rf, 2):
