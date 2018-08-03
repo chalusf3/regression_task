@@ -503,6 +503,29 @@ def stacked_hadamard_rademacher(X, n_rff, k):
     return prods
 # print stacked_hadamard_rademacher(np.eye(7), 3, 1)
 
+def stacked_hadamard_rademacher_downsampled(X, n_rff, k):
+    # returns the product of X.T with orthogonal vectors containting 0 +1 -1
+    original_dimension = X.shape[1] # dimension of input feature vector
+    HD_dim = 2 ** (int(np.log(original_dimension) / np.log(2)))
+
+    # The output of hadamard_rademacher_product is a (HD_dim, x.shape[1]) matrix. We stack ceil(n_rff/HD_dim) of those to get a (ceil(n_rff/HD_dim)*HD_dim, x.shape[1]) matrix
+    prods = np.concatenate([hadamard_rademacher_product(X[:, np.random.choice(original_dimension, size = HD_dim, replace = False)].T, k) for _ in range(int(np.ceil(float(n_rff) / HD_dim)))]).T
+    # prods is now of shape (X.shape[0], ceil(n_rff / HD_dim) * HD_dim)
+    del X
+    
+    # Then we discard some columns 
+    # idx = np.random.choice(prods.shape[1], size = n_rff, replace = False) # TODO: replace this by sampling only the last block!
+    idx_last_block = int(np.floor(float(n_rff) / HD_dim)) * HD_dim
+    idx = range(idx_last_block) 
+    if idx_last_block < n_rff:
+        idx.extend(np.random.choice(np.arange(idx_last_block, prods.shape[1]), n_rff - idx_last_block, replace = False))
+    prods = prods[:, idx]
+
+    # Scale all rows independently so that they're approximately unit length
+    prods *= np.sqrt(float(HD_dim) / original_dimension)
+    return prods
+# print stacked_hadamard_rademacher_downsampled(np.eye(7), 18, 1) * np.sqrt(7)
+
 def HD_gaussian_RFF(X, n_rff, seed, scale, k):
     np.random.seed(seed)
     dim = X.shape[1]
@@ -705,6 +728,24 @@ def HD_polynomial_sp_random_features(X, n_features, seed, degree, inhom_term = 0
     PhiX = np.ones((X.shape[0], n_features))
     for _ in range(degree):
         PhiX = PhiX * stacked_hadamard_rademacher(X, n_features, 1) * np.sqrt(dim)
+    PhiX /= np.sqrt(n_features)
+    
+    return PhiX
+
+def HD_polynomial_sp_random_features_downsample(X, n_features, seed, degree, inhom_term = 0):
+    """
+    generates features for feature matrix X and kernel (<x,y>+inhom_term)^degree using random HD projections
+    """
+    if inhom_term != 0:
+        X = np.pad(X, (((0,0), (1,0))), 'constant', constant_values = ((np.nan, np.nan), (np.sqrt(inhom_term), np.nan)))
+    
+    dim = X.shape[1]
+    HD_dim = 2 ** (int(np.log(dim) / np.log(2)))
+
+    np.random.seed(seed)
+    PhiX = np.ones((X.shape[0], n_features))
+    for _ in range(degree):
+        PhiX = PhiX * stacked_hadamard_rademacher_downsampled(X, n_features, 1) * dim / np.sqrt(HD_dim)
     PhiX /= np.sqrt(n_features)
     
     return PhiX
