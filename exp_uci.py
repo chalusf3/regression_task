@@ -194,11 +194,11 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
     else:    
         n_seeds = 50
 
-    polynomial_kernel = 'iid_polyn' in algos.keys()
+    polynomial_kernel = sum(['polyn' in key for key in algos.keys()])>0
 
     if data_name == 'airq':
         if polynomial_kernel:
-            n_rffs = range(12, 288 + 1, 12)
+            n_rffs = range(12, 144 + 1, 12)
         else:
             n_rffs = range(4,24 + 1,2) # for squared exponential kernels
     elif data_name == 'wine':
@@ -239,18 +239,32 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
             
     return algos.keys()
 
-def print_average_regression_error_SE(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
+def print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
     # Kernel performance (from pickle archive)    
-    with open('output/%s_exact_gauss_krr.pk' % data_name, 'rb') as f:
-        data = pickle.load(f)
-    n_rff = [key for key in data.keys() if isinstance(key, numbers.Number) ][0]
-    print data[n_rff]
-    print '{0} & {1:.3} & [{1:.3}, {1:.3}] & {2:.5} \\\\'.format('exact SE kernel'.ljust(24), data[n_rff][0], data['runtimes'][n_rff])
+    polynomial_kernel = sum(['polyn' in key for key in algos.keys()])>0
+    if not polynomial_kernel:
+        with open('output/%s_exact_gauss_krr.pk' % data_name, 'rb') as f:
+            data = pickle.load(f)
+        n_rff = [key for key in data.keys() if isinstance(key, numbers.Number) ][0]
+        print data[n_rff]
+        print '{0} & {1:.3} & [{1:.3}, {1:.3}] & {2:.5} \\\\'.format('exact SE kernel'.ljust(24), data[n_rff][0], data['runtimes'][n_rff])
+    else:
+        with open('output/%s_exact_polyn_sp_krr.pk' % data_name, 'rb') as f:
+            data = pickle.load(f)
+        n_rff = [key for key in data.keys() if isinstance(key, numbers.Number) ][0]
+        print data[n_rff]
+        print '{0} & {1:.3} & [{1:.3}, {1:.3}] & {2:.5} \\\\'.format('exact polyn kernel'.ljust(24), data[n_rff][0], data['runtimes'][n_rff])
 
     if data_name == 'airq':
-        n_rff = 12
+        if polynomial_kernel:
+            n_rff = 72
+        else:
+            n_rff = 12
     elif data_name == 'wine':
-        n_rff = 12
+        if polynomial_kernel:
+            n_rff = 84
+        else:
+            n_rff = 12
 
     n_seeds = 1000
 
@@ -266,73 +280,84 @@ def print_average_regression_error_SE(data_name, algos, X_train, y_train, X_test
         print '{} & {:.3} & [{:.3}, {:.3}] & {:.5} \\\\'.format(algo_name.replace('_', ' ').replace('fix', 'fixed').ljust(24), np.mean(errors[n_rff]), np.percentile(errors, 2.5), np.percentile(errors, 97.5), runtime)
 
 def regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale = 1.0, degree = 2.0, inhom_term = 1.0):  
-    if data_name == 'airq':
-        n_rffs = [4,24] # for squared exponential kernels
-    elif data_name == 'wine':
-        n_rffs = [4,32] # for squared exponential kernels
-    errors = {}
-    errors['runtimes'] = {}
-    n_trials = 10
-    start_time = time.clock()
-    for _ in range(n_trials):
-        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
-    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
-    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
-    errors[n_rffs[-1]] = errors[n_rffs[0]]
-    print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    if n_trials > 1:
-        filename = 'output/timing/%s_exact_gauss_krr.pk' % data_name
-    else:
-        filename = 'output/%s_exact_gauss_krr.pk' % data_name
+    if scale != None:
+        if data_name == 'airq':
+            n_rffs = [4,24] # for squared exponential kernels
+        elif data_name == 'wine':
+            n_rffs = [4,32] # for squared exponential kernels
+        errors = {}
+        errors['runtimes'] = {}
+        n_trials = 10
+        start_time = time.clock()
+        for _ in range(n_trials):
+            y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.gaussian_kernel(a, b, scale))
+        errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+        errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
+        errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
+        errors[n_rffs[-1]] = errors[n_rffs[0]]
+        print '{} \t{} \t{:.4}sec'.format('SE kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
+        if n_trials > 1:
+            filename = 'output/timing/%s_exact_gauss_krr.pk' % data_name
+        else:
+            filename = 'output/%s_exact_gauss_krr.pk' % data_name
 
-    with open(filename, 'wb+') as f:
-        pickle.dump(errors, f)
+        with open(filename, 'wb+') as f:
+            pickle.dump(errors, f)
     
-    n_rffs = [4,144]
-    errors = {}
-    errors['runtimes'] = {}
-    n_trials = 10
-    start_time = time.clock()
-    for _ in range(n_trials):
-        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
-    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
-    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
-    errors[n_rffs[-1]] = errors[n_rffs[0]]
-    print '{} \t{} \t{:.4}sec'.format('exponential scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    if n_trials > 1:
-        filename = 'output/timing/%s_exact_exp_sp_krr.pk' % data_name
-    else:
-        filename = 'output/%s_exact_exp_sp_krr.pk' % data_name
-    with open(filename, 'wb+') as f:
-        pickle.dump(errors, f)
-    
-    n_rffs = [4,144]
-    errors = {}
-    errors['runtimes'] = {}
-    n_trials = 10
-    start_time = time.clock()
-    for _ in range(n_trials):
-        y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
-    errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
-    errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
-    errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
-    errors[n_rffs[-1]] = errors[n_rffs[0]]
-    print '{} \t{} \t{:.4}sec'.format('polynomial scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
-    if n_trials > 1:
-        'output/timing/%s_exact_poly_sp_krr.pk' % data_name
-    else:
-        'output/%s_exact_poly_sp_krr.pk' % data_name
-    with open(filename, 'wb+') as f:
-        pickle.dump(errors, f)
+    if degree != None:
+        """
+        n_rffs = [4,144]
+        errors = {}
+        errors['runtimes'] = {}
+        n_trials = 10
+        start_time = time.clock()
+        for _ in range(n_trials):
+            y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.exponential_sp_kernel(a, b, scale))
+        errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+        errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
+        errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
+        errors[n_rffs[-1]] = errors[n_rffs[0]]
+        print '{} \t{} \t{:.4}sec'.format('exponential scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
+        if n_trials > 1:
+            filename = 'output/timing/%s_exact_exp_sp_krr.pk' % data_name
+        else:
+            filename = 'output/%s_exact_exp_sp_krr.pk' % data_name
+        with open(filename, 'wb+') as f:
+            pickle.dump(errors, f)
+        """
+        
+        n_rffs = [4,144]
+        errors = {}
+        errors['runtimes'] = {}
+        n_trials = 5
+        start_time = time.clock()
+        for _ in range(n_trials):
+            y_test_fit = krr.fit_from_kernel_gen(X_train, y_train, X_test, noise_var, lambda a, b: kernels.polynomial_sp_kernel(a, b, degree, inhom_term))
+        errors['runtimes'][n_rffs[0]] = (time.clock() - start_time) / n_trials
+        errors['runtimes'][n_rffs[-1]] = errors['runtimes'][n_rffs[0]]
+        errors[n_rffs[0]] = [np.linalg.norm(y_test_fit - y_test, ord = 1) / y_test.shape[0]]
+        errors[n_rffs[-1]] = errors[n_rffs[0]]
+        print '{} \t{} \t{:.4}sec'.format('polynomial scalar product kernel', errors[n_rffs[0]], errors['runtimes'][n_rffs[0]])
+        if n_trials > 1:
+            filename = 'output/timing/%s_exact_polyn_sp_krr.pk' % data_name
+        else:
+            filename = 'output/%s_exact_polyn_sp_krr.pk' % data_name
+        with open(filename, 'wb+') as f:
+            pickle.dump(errors, f)
     
 def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.figure(figsize = (6,4))
     ylim_ticks = [1,0]
     for algo_name in algo_names:
-        with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
-            data = pickle.load(f)
+        try:
+            with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
+                data = pickle.load(f)
+                print 'Opening ' + 'output/%s_%s_krr.pk' % (data_name, algo_name)
+        except IOError:
+            with open('output/timing/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
+                data = pickle.load(f)
+                print 'Opening ' + 'output/timing/%s_%s_krr.pk' % (data_name, algo_name)
+
         x = filter(lambda k: isinstance(k, numbers.Number), data.keys())
         x.sort()
         means = np.array([np.mean(data[k]) for k in x])
@@ -348,10 +373,11 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.ylabel(r'Average regression error')
     # plt.yscale('log')
 
-    polynomial_kernel = 'iid_polyn' in algo_names
+    polynomial_kernel = sum(['polyn' in k for k in algo_names]) > 0
 
     if data_name == 'wine':
         if polynomial_kernel:
+            dim = 12
             yticks_spacing = 5e-1 # space between y ticks
             xticks_spacing = 12
         else:
@@ -359,7 +385,8 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
             xticks_spacing = 2
     elif data_name == 'airq':
         if polynomial_kernel:
-            yticks_spacing = 5e-2
+            dim = 13
+            yticks_spacing = 2e-1
             xticks_spacing = 12
         else:
             yticks_spacing = 5e-2 # space between y ticks
@@ -370,8 +397,11 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.yticks(yticks_spacing * np.arange(yticks_lim_integer[0], 1 + yticks_lim_integer[1]))
     plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.2f'))
 
+    plt.plot([sp_sp.comb(dim + 2.0, 2.0)] * 2, plt.gca().get_ylim(),'-', linewidth = 1)
+
     xticks_lim = [(int(min(plt.xticks()[0]) / xticks_spacing) + 1) * xticks_spacing, int(max(plt.xticks()[0]) / xticks_spacing) * xticks_spacing]
     plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, xticks_spacing))
+    plt.xlim(0)
 
     plt.legend()
     plt.tight_layout()
@@ -575,7 +605,7 @@ def plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, sc
 
     ### regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     # regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-    # print_average_regression_error_SE(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    # print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
     # keys = ['iid','iid_fix_norm','ort','ort_fix_norm','ort_weighted','ort_fix_norm_weighted','ort_ss_all','HD_1','HD_2','HD_3','HD_1_fix_norm','HD_2_fix_norm','HD_3_fix_norm']
     # plot_regression_errors(data_name, ['exact_gauss'] + keys)
@@ -592,20 +622,21 @@ def plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, sc
     plot_runtimes(data_name, [key + '_krr' for key in ['iid', 'ort_weighted']], filename = 'iid+ort_weighted')
 
 def plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term):
-    keys = ['iid_polyn', 'iid_unit_polyn', 'ort_polyn', 'discrete_polyn', 'HD_polyn']
+    keys = ['iid_polyn', 'iid_unit_polyn', 'ort_polyn', 'discrete_polyn', 'HD_polyn', 'HD_downsample_polyn']
     algos = algos_generator(keys, scale = None, degree = degree, inhom_term = inhom_term)
 
-    # print_average_regression_error_polyn(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
-    regression_error_n_rff(        data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, None, degree, inhom_term)
+    # regression_error_n_rff( data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
-    plot_regression_errors(data_name, ['exact_poly_sp'] + keys, filename = 'polyn')
+    # plot_regression_errors(data_name, ['exact_polyn_sp'] + keys, filename = 'polyn')
     # plot_runtimes(data_name, keys)
 
 def main():
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
     np.random.seed(0)
-    data_name = ['wine', 'airq', 'MSD'][0]
+    data_name = ['wine', 'airq', 'MSD'][1]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -623,11 +654,11 @@ def main():
         inhom_term = 1.0
     elif data_name == 'MSD':
         scale = 300.0
-        degree = 3
+        degree = 2
         inhom_term = 1.0
 
     # dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale)
-    algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
+    # algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
     # dependence_n_datapoints_rff(data_name, X, y, noise_var, algos)
     # plot_dependence_n_datapoints(data_name, algos.keys())
 
@@ -641,11 +672,11 @@ def main():
     # X_train = 80 % of all data
     # X_test =  20 % of all data
     
-    # print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X_train.shape[1] + degree, degree))
+    print('Dimension implicit feature space polynomial kernel = %d' % sp_sp.comb(X_train.shape[1] + int(inhom_term != 0) + degree, degree))
     
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
-    plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, scale)
-    # plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term)
+    # plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, scale)
+    plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term)
 
     # plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, lambda x, n_rff: kernels.ort_gaussian_RFF(x, n_rff, 0, scale), algoname = 'iid')
 

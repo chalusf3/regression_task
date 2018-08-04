@@ -151,7 +151,7 @@ def polynomial_kernel():
         y = np.array([np.mean(np.square(results[algo_name][k])) for k in x])
         counts = np.array([np.sum(results[algo_name][k]>0) for k in x])
         print algo_name, np.mean(y[-dim:]), np.mean(counts[-dim:])#, results[algo_name][x[-1]][-10:]
-        p = plt.plot(x, y, label = algo_name.replace('_', '\_'))
+        p = plt.plot(x, y, label = algo_name.replace('_', ' '), linewidth = 1)
         # stds = np.array([np.std(results[algo_name][k]) for k in x])
         # plt.fill_between(x, y - stds, y + stds, color = p[0].get_color(), alpha = 0.05)
     plt.yscale('log')
