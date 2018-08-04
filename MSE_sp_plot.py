@@ -91,7 +91,7 @@ def MSE_HD_discrete_weighted(x_dot_x, y_dot_y, x_dot_y, xy_dot_xy, dim, degree, 
 def plot_MSE_iid_gaussian_unit():
     dim = 24
     n_rf = np.arange(1, 1+5*dim)
-    degree = 3
+    degree = 2
     x_dot_x = 1.0
     y_dot_y = 1.0
     for x_dot_y in [0.9]:  #reversed(np.arange(0.0, 1.0, 0.05)):
@@ -109,8 +109,8 @@ def plot_MSE_iid_gaussian_unit():
             plt.plot(n_rf, MSE_ou,  label = 'ort unit',          linewidth = 1, color = 'C2')
             plt.plot(n_rf, MSE_ouw, label = 'ort unit weighted', linewidth = 1, color = 'C3')
             plt.plot(n_rf, MSE_id,  label = 'discrete',          linewidth = 1, color = 'C4')
-            plt.plot(n_rf, MSE_HD,  label = 'HD',                linewidth = 1, color = 'C5')
-            plt.plot(n_rf, MSE_HDw, label = 'HD weighted',       linewidth = 1, color = 'C6')
+            # plt.plot(n_rf, MSE_HD,  label = 'HD',                linewidth = 1, color = 'C5')
+            # plt.plot(n_rf, MSE_HDw, label = 'HD weighted',       linewidth = 1, color = 'C6')
             plt.yscale('log')
             plt.xlim(0, max(n_rf)-1)
             plt.legend()
