@@ -148,7 +148,7 @@ def kernel_error(data_name, X_train, noise_var, scale):
             pickle.dump(errors, f)
 """
 
-def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
+def algos_generator(keys, scale = None, degree = None, inhom_term = None):
     algos = {}
     # RBF kernels
     algos['iid'] =                   lambda raw_feature, n_rff, seed:                         kernels.iid_gaussian_RFF(raw_feature, n_rff, seed, scale)
@@ -188,7 +188,7 @@ def algos_generator(keys, scale = 1.0, degree = 2.0, inhom_term = 1.0):
     return algos
 
 def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, noise_var):
-    timing = False
+    timing = True
     if timing:
         n_seeds = 1000
     else:    
@@ -198,12 +198,12 @@ def regression_error_n_rff(data_name, algos, X_train, y_train, X_test, y_test, n
 
     if data_name == 'airq':
         if polynomial_kernel:
-            n_rffs = range(12, 144 + 1, 12)
+            n_rffs = range(12, 132 + 1, 12)
         else:
             n_rffs = range(4,24 + 1,2) # for squared exponential kernels
     elif data_name == 'wine':
         if polynomial_kernel:
-            n_rffs = range(12, 144 + 1, 12)
+            n_rffs = range(12, 132 + 1, 12)
         else:                
             n_rffs = range(4,32 + 1,2) # for squared exponential kernels
     for algo_name, feature_gen_handle in algos.items():
@@ -350,13 +350,13 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     ylim_ticks = [1,0]
     for algo_name in algo_names:
         try:
-            with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
-                data = pickle.load(f)
-                print 'Opening ' + 'output/%s_%s_krr.pk' % (data_name, algo_name)
-        except IOError:
             with open('output/timing/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
                 data = pickle.load(f)
                 print 'Opening ' + 'output/timing/%s_%s_krr.pk' % (data_name, algo_name)
+        except IOError:
+            with open('output/%s_%s_krr.pk' % (data_name, algo_name), 'rb+') as f:
+                data = pickle.load(f)
+                print 'Opening ' + 'output/%s_%s_krr.pk' % (data_name, algo_name)
 
         x = filter(lambda k: isinstance(k, numbers.Number), data.keys())
         x.sort()
@@ -397,11 +397,11 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.yticks(yticks_spacing * np.arange(yticks_lim_integer[0], 1 + yticks_lim_integer[1]))
     plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.2f'))
 
-    plt.plot([sp_sp.comb(dim + 2.0, 2.0)] * 2, plt.gca().get_ylim(),'-', linewidth = 1)
-
     xticks_lim = [(int(min(plt.xticks()[0]) / xticks_spacing) + 1) * xticks_spacing, int(max(plt.xticks()[0]) / xticks_spacing) * xticks_spacing]
     plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, xticks_spacing))
     plt.xlim(0)
+
+    plt.plot([sp_sp.comb(dim + 2.0, 2.0)] * 2, plt.gca().get_ylim(),'-', linewidth = 1)
 
     plt.legend()
     plt.tight_layout()
@@ -425,8 +425,13 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.xlabel(r'\# random features')
     plt.ylabel(r'Average runtime [s]')
     
+    polynomial_kernel = sum(['polyn' in k for k in algo_names]) > 0
+
     if data_name in ['wine', 'airq', 'MSD']:
-        xticks_spacing = 2
+        if polynomial_kernel:
+            xticks_spacing = 24
+        else:
+            xticks_spacing = 2
     else:
         xticks_spacing = 24
     xticks_lim = ((int(min(plt.xticks()[0]) / xticks_spacing) + 1) * xticks_spacing, int(max(plt.xticks()[0]) / xticks_spacing) * xticks_spacing)
@@ -459,6 +464,7 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     # xticks_lim = ((int(min(plt.xticks()[0]) / 2) + 1) * 2, int(max(plt.xticks()[0]) / 2) * 2)
     # plt.xticks(range(xticks_lim[0], xticks_lim[1]+1, 2))
     # plt.ylim(0)
+    plt.xlim(0)
     plt.legend()
     plt.tight_layout()
     plt.savefig('runtime_%s_%s_alt.eps' % (data_name, filename))
@@ -625,12 +631,12 @@ def plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var,
     keys = ['iid_polyn', 'iid_unit_polyn', 'ort_polyn', 'discrete_polyn', 'HD_polyn', 'HD_downsample_polyn']
     algos = algos_generator(keys, scale = None, degree = degree, inhom_term = inhom_term)
 
-    print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
+    # print_average_regression_error(data_name, algos, X_train, y_train, X_test, y_test, noise_var)
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, None, degree, inhom_term)
     # regression_error_n_rff( data_name, algos, X_train, y_train, X_test, y_test, noise_var)
 
-    # plot_regression_errors(data_name, ['exact_polyn_sp'] + keys, filename = 'polyn')
-    # plot_runtimes(data_name, keys)
+    plot_regression_errors(data_name, ['exact_polyn_sp'] + keys, filename = 'polyn')
+    plot_runtimes(data_name, [k + '_krr' for k in keys])
 
 def main():
     plt.rc('text', usetex=True)
