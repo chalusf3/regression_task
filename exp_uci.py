@@ -410,11 +410,21 @@ def plot_regression_errors(data_name, algo_names, filename = 'regression'):
     plt.clf()
 
 def plot_runtimes(data_name, algo_names, filename = 'regression'):
+    polynomial_kernel = sum(['polyn' in k for k in algo_names]) > 0
+
     plt.figure(figsize = (8,6))
     # ylim_ticks = [1,0]
     for algo_name in algo_names:
-        with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
-            data = pickle.load(f)['runtimes']
+        if polynomial_kernel:
+            try:
+                with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
+                    data = pickle.load(f)['runtimes']
+                    print 'Opening output/timing/%s_%s.pk' % (data_name, algo_name)
+            except IOError:
+                with open('output/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
+                    data = pickle.load(f)['runtimes']
+                    print 'Opening output/%s_%s.pk' % (data_name, algo_name)
+                    
         n_rffs = data.keys()
         n_rffs.sort()
         runtimes = np.array([data[n_rff] for n_rff in n_rffs])
@@ -425,8 +435,6 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
     plt.xlabel(r'\# random features')
     plt.ylabel(r'Average runtime [s]')
     
-    polynomial_kernel = sum(['polyn' in k for k in algo_names]) > 0
-
     if data_name in ['wine', 'airq', 'MSD']:
         if polynomial_kernel:
             xticks_spacing = 24
@@ -447,8 +455,16 @@ def plot_runtimes(data_name, algo_names, filename = 'regression'):
 
     plt.figure(figsize = (8,6))
     for algo_name in algo_names:
-        with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
-            data = pickle.load(f)
+        if polynomial_kernel:
+            try:
+                with open('output/timing/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
+                    data = pickle.load(f)
+                    print 'Opening output/timing/%s_%s.pk' % (data_name, algo_name)
+            except IOError:
+                with open('output/%s_%s.pk' % (data_name, algo_name), 'rb') as f:
+                    data = pickle.load(f)
+                    print 'Opening output/%s_%s.pk' % (data_name, algo_name)
+
         n_rffs = filter(lambda k: isinstance(k ,numbers.Number), data.keys())
         n_rffs.sort()
         runtimes = np.array([data['runtimes'][n_rff] for n_rff in n_rffs])
@@ -544,11 +560,11 @@ def plot_dependence_n_datapoints(data_name, algo_names):
         with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
             data = pickle.load(f)
         division_ratios = sorted(filter(lambda k: isinstance(k, numbers.Number), data.keys()))
-        plt.plot(division_ratios, [data[dr] for dr in division_ratios], '*-', linewidth = 1, label = 'exact kernel')
+        plt.plot(division_ratios, [data[dr] for dr in division_ratios], marker = matplotlib.markers.MarkerStyle.filled_markers[0], linewidth = 1, label = 'exact kernel')
 
     # plot the RFF algos curves
     color_dict = {}
-    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[0:len(algo_names)]):
+    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[1:1+len(algo_names)]):
         with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
             data = pickle.load(f)
         n_rffs = sorted(filter(lambda k: isinstance(k, numbers.Number), data.keys()))
@@ -571,7 +587,7 @@ def plot_dependence_n_datapoints(data_name, algo_names):
 
     # plot runtimes
     plt.figure(figsize = (6, 4))
-    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[0:len(algo_names)]):
+    for algo_name, marker in zip(algo_names, matplotlib.markers.MarkerStyle.filled_markers[1:1+len(algo_names)]):
         with open('output_dep/%s_%s_krr.pk' % (data_name, algo_name)) as f:
             data = pickle.load(f)['runtimes']
         n_rffs = sorted(data.keys())
@@ -585,12 +601,12 @@ def plot_dependence_n_datapoints(data_name, algo_names):
         with open('output_dep/%s_exact_gauss_krr.pk' % data_name) as f:
             data = pickle.load(f)['runtimes']
         division_ratios = sorted(data.keys())
-        plt.plot(division_ratios, [data[dr] for dr in division_ratios], marker = marker, markersize = 4, linewidth = 1, label = r'exact SE kernel')
+        plt.plot(division_ratios, [data[dr] for dr in division_ratios], marker = matplotlib.markers.MarkerStyle.filled_markers[0], markersize = 4, linewidth = 1, label = r'exact SE kernel')
     plt.xlabel('Fraction of training data used for training')
     plt.ylabel('Runtime [s]')
     
-    asymptotics_x = np.linspace(min(division_ratios), max(division_ratios))
-    plt.plot(asymptotics_x, 0.2e4*np.power(asymptotics_x, 1), '.', linewidth = 1, markersize = 1, label = r'$O(x)$')
+    # asymptotics_x = np.linspace(min(division_ratios), max(division_ratios))
+    # plt.plot(asymptotics_x, 0.2e4*np.power(asymptotics_x, 1), '.', linewidth = 1, markersize = 1, label = r'$O(x)$')
     # plt.plot(asymptotics_x, 1e3*np.power(asymptotics_x, 2), '.', linewidth = 1, markersize = 1, label = r'$O(x^2)$')
 
     # plt.ylim(0)
@@ -642,7 +658,7 @@ def main():
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
     np.random.seed(0)
-    data_name = ['wine', 'airq', 'MSD'][1]
+    data_name = ['wine', 'airq', 'MSD'][2]
     if data_name == 'wine':
         X, y = load_wine_dataset()
     elif data_name == 'airq':
@@ -664,9 +680,9 @@ def main():
         inhom_term = 1.0
 
     # dependence_n_datapoints_kernel(data_name, X, y, noise_var, scale)
-    # algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
+    algos = algos_generator(['iid', 'ort_weighted'], scale = scale, degree = degree, inhom_term = inhom_term)
     # dependence_n_datapoints_rff(data_name, X, y, noise_var, algos)
-    # plot_dependence_n_datapoints(data_name, algos.keys())
+    plot_dependence_n_datapoints(data_name, algos.keys())
 
     if data_name == 'wine' or data_name == 'airq':
         X_train, y_train, X_test, y_test = split_data(X, y, 0.8) 
@@ -682,7 +698,7 @@ def main():
     
     # regression_error_kernel(data_name, X_train, y_train, X_test, y_test, noise_var, scale, degree, inhom_term)
     # plotting_error_SE(X_train, y_train, X_test, y_test, data_name, noise_var, scale)
-    plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term)
+    # plotting_error_polyn(X_train, y_train, X_test, y_test, data_name, noise_var, degree, inhom_term)
 
     # plot_efficiency(data_name, X_train, y_train, X_test, y_test, noise_var, lambda x, n_rff: kernels.ort_gaussian_RFF(x, n_rff, 0, scale), algoname = 'iid')
 
