@@ -117,14 +117,14 @@ def polynomial_kernel():
     algos = {}
     algos['iid_unit'] =      lambda X, n_rf, seed:      kernels.iid_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
     algos['ort_unit'] =      lambda X, n_rf, seed:      kernels.ort_polynomial_sp_random_unit_features(X, n_rf, seed, degree, inhom_term)
-    algos['iid'] =           lambda X, n_rf, seed:           kernels.iid_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
+    algos['iid_Gaussian'] =  lambda X, n_rf, seed:           kernels.iid_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
     algos['ort'] =           lambda X, n_rf, seed:  kernels.ort_polynomial_sp_random_gaussian_features(X, n_rf, seed, degree, inhom_term)
     algos['discrete_iid'] =  lambda X, n_rf, seed:      kernels.discrete_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
     algos['HD'] =            lambda X, n_rf, seed:            kernels.HD_polynomial_sp_random_features(X, n_rf, seed, degree, inhom_term)
     algos['HD_downsample'] = lambda X, n_rf, seed: kernels.HD_polynomial_sp_random_features_downsample(X, n_rf, seed, degree, inhom_term)
     plt.figure(figsize = (6,4))
     results = {}
-    algo_keys_plot = ['iid', 'iid_unit', 'ort_unit', 'discrete_iid', 'HD', 'HD_downsample']
+    algo_keys_plot = ['iid_Gaussian', 'iid_unit', 'ort_unit', 'discrete_iid', 'HD', 'HD_downsample']
     for algo_name, feature_handle in [(algo_key, algos[algo_key]) for algo_key in algo_keys_plot]:
         results[algo_name] = { }
         for n_rf in range(2, max_n_rf, 2):

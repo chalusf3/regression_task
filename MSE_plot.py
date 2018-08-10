@@ -242,23 +242,23 @@ def main():
 
     z = 1.0
 
-    dims = np.power(2, np.arange(2, 10, step = 2), dtype = np.float32)
+    # dims = np.power(2, np.arange(2, 10, step = 2), dtype = np.float32)
     # dims = [1,2,3,4]
-    n_rffs = np.arange(1, 4*max(dims), dtype = np.float32)
+    # n_rffs = np.arange(1, 4*max(dims), dtype = np.float32)
     # iid_ort(z, dims, n_rffs)
-    iid_ort_weighted(np.sqrt(2 * 24) / (2.0 * np.sqrt(24)), [24], np.arange(1, 10 * 24 + 1, dtype = np.float32), fixed_norm_mean_chi_sq)
+    # iid_ort_weighted(np.sqrt(2 * 24) / (2.0 * np.sqrt(24)), [24], np.arange(1, 10 * 24 + 1, dtype = np.float32), fixed_norm_mean_chi_sq)
     # plot_optimal_weights(1, [24], np.arange(1, 10 * 24 + 1, dtype = np.float32))
 
-    dims = [8, 16, 32]
+    # dims = [8, 16, 32]
     # bias_fixed_norm(dims, fixed_norm_mean_chi_sq)
     # iid_fixed_norm(dims, fixed_norm_mean_chi_sq)
     # z = 1.25
     # n_rffs = np.arange(1, max(dims), dtype = np.float32)
     # iid_ort_fixed_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
 
-    # dims = [8]
-    # n_rffs = np.arange(1, 1000 * max(dims), dtype = np.float32)
-    # iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
+    dims = [8]
+    n_rffs = np.arange(1, 1000 * max(dims), dtype = np.float32)
+    iid_ort_indep_fixed_indep_norm(z, dims, n_rffs, fixed_norm_mean_chi_sq)
 
 if __name__ == '__main__':
     main()
